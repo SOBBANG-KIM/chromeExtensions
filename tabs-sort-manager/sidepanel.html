@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tabs</title>
+  <link rel="stylesheet" href="./sidepanel.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="row">
+      <div class="searchWrap">
+        <input id="search" class="search" placeholder="검색: 제목/URL/도메인/그룹명" />
+        <button id="clearSearch" class="iconBtn" title="검색어 지우기" aria-label="검색어 지우기">×</button>
+      </div>
+      <button id="refresh" class="btn">새로고침</button>
+      <button id="themeToggle" class="btn" title="화이트/다크 테마 전환">Dark</button>
+    </div>
+
+    <div class="row">
+      <button id="sortDomain" class="btn primary">도메인별 자동정렬</button>
+
+      <button id="makeGroup" class="btn">선택 탭 그룹 생성</button>
+      <select id="groupColor" class="select" title="그룹 색상">
+        <option value="blue">blue</option>
+        <option value="grey">grey</option>
+        <option value="red">red</option>
+        <option value="yellow">yellow</option>
+        <option value="green">green</option>
+        <option value="pink">pink</option>
+        <option value="purple">purple</option>
+        <option value="cyan">cyan</option>
+        <option value="orange">orange</option>
+      </select>
+    </div>
+
+    <div class="hint">
+      • 드래그로 수동 정렬 • 탭 체크 후 그룹 생성 • 그룹 헤더/그룹 리스트에서 Ungroup 가능 • 도메인 섹션은 전체선택 지원
+    </div>
+  </header>
+
+  <main>
+    <div id="list" class="list"></div>
+  </main>
+
+  <script type="module" src="./sidepanel.js"></script>
+</body>
+</html>
