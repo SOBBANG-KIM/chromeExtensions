@@ -72,7 +72,7 @@ async function init() {
   $("#insert").addEventListener("click", async () => {
     const s = getEditingSnippet();
     if (!s?.id) {
-      alert("저장된 스니펫을 선택해 주세요.");
+      alert("please select a saved snippet");
       return;
     }
     await insertSnippetById(s.id);
@@ -83,7 +83,7 @@ async function init() {
     const key = ($("#varKey").value || "").trim();
     const val = ($("#varValue").value || "");
     if (!isValidVarKey(key)) {
-      alert("변수 키는 영문/숫자/언더스코어만 권장합니다. 예: name, phone_number");
+      alert("variable keys are recommended to be alphanumeric and underscores only. e.g. name, phone_number");
       return;
     }
     state.variables[key] = val;
@@ -215,7 +215,7 @@ function renderListTo(container, items, isPinnedSection) {
   if (items.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = isPinnedSection ? "고정된 스니펫이 없습니다." : "스니펫이 없습니다.";
+    empty.textContent = isPinnedSection ? "no pinned snippets" : "no snippets";
     container.appendChild(empty);
     return;
   }
@@ -284,13 +284,13 @@ function renderListTo(container, items, isPinnedSection) {
     const handle = document.createElement("div");
     handle.className = "dragHandle";
     handle.textContent = "⋮⋮";
-    handle.title = dragEnabled ? "드래그로 순서 이동" : "검색 중에는 정렬을 끕니다";
+    handle.title = dragEnabled ? "drag to reorder" : "dragging is disabled while searching";
     handle.addEventListener("click", (e) => e.stopPropagation());
 
     const pin = document.createElement("button");
     pin.className = "pinBtn" + (s.pinned ? " pinned" : "");
     pin.textContent = "★";
-    pin.title = s.pinned ? "고정 해제" : "고정";
+    pin.title = s.pinned ? "unpin" : "pin";
     pin.addEventListener("click", async (e) => {
       e.stopPropagation();
       await togglePin(s.id);
@@ -298,11 +298,11 @@ function renderListTo(container, items, isPinnedSection) {
 
     const title = document.createElement("div");
     title.className = "itemTitle";
-    title.textContent = s.title || "(제목 없음)";
+    title.textContent = s.title || "(no title)";
 
     const badge = document.createElement("div");
     badge.className = "badge";
-    badge.textContent = `${s.usageCount || 0}회`;
+    badge.textContent = `${s.usageCount || 0} times`;
 
     top.appendChild(handle);
     top.appendChild(pin);
@@ -311,7 +311,7 @@ function renderListTo(container, items, isPinnedSection) {
 
     const meta = document.createElement("div");
     meta.className = "itemMeta";
-    meta.textContent = (s.tags && s.tags.length) ? `#${s.tags.join(" #")}` : "태그 없음";
+    meta.textContent = (s.tags && s.tags.length) ? `#${s.tags.join(" #")}` : "no tags";
 
     const preview = document.createElement("div");
     preview.className = "itemPreview";
@@ -370,8 +370,8 @@ function readForm() {
 async function onSave() {
   const form = readForm();
 
-  if (!form.title) { alert("제목을 입력해 주세요."); return; }
-  if (!form.content) { alert("본문을 입력해 주세요."); return; }
+  if (!form.title) { alert("please enter a title"); return; }
+  if (!form.content) { alert("please enter a content"); return; }
 
   const now = Date.now();
 
@@ -411,7 +411,7 @@ async function onSave() {
 
 async function onDelete() {
   if (!state.editingId) return;
-  if (!confirm("정말 삭제할까요?")) return;
+  if (!confirm("are you sure you want to delete?")) return;
 
   state.snippets = state.snippets.filter(s => s.id !== state.editingId);
   normalizeOrdersInPlace();
@@ -613,7 +613,7 @@ async function insertSnippetById(id) {
 
   const ensure = await chrome.runtime.sendMessage({ type: "TS_ENSURE_CONTENT" });
   if (!ensure?.ok) {
-    alert("현재 탭을 찾지 못했어요. 삽입할 페이지로 이동한 뒤 다시 시도해 주세요.");
+    alert("current tab not found. please navigate to the page you want to insert and try again.");
     return;
   }
   state.lastActiveTabId = ensure.tabId;
@@ -646,7 +646,7 @@ async function doInsertText(snippet, text) {
   });
 
   if (!res?.ok) {
-    alert("삽입할 입력칸을 찾지 못했어요. 페이지에서 입력칸을 클릭한 뒤 다시 시도해 주세요.");
+    alert("input field not found. please click the input field on the page and try again.");
     return;
   }
 
@@ -732,7 +732,7 @@ function renderVariables() {
   if (entries.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = "등록된 변수가 없습니다. 위에서 추가해 주세요.";
+    empty.textContent = "no registered variables. please add them above.";
     list.appendChild(empty);
     return;
   }
@@ -753,7 +753,7 @@ function renderVariables() {
 
     const edit = document.createElement("button");
     edit.className = "smallBtn";
-    edit.textContent = "수정";
+    edit.textContent = "edit";
     edit.addEventListener("click", () => {
       $("#varKey").value = k;
       $("#varValue").value = v || "";
@@ -762,9 +762,9 @@ function renderVariables() {
 
     const del = document.createElement("button");
     del.className = "smallBtn";
-    del.textContent = "삭제";
+    del.textContent = "delete";
     del.addEventListener("click", async () => {
-      if (!confirm(`변수 "${k}"를 삭제할까요?`)) return;
+      if (!confirm(`are you sure you want to delete the variable "${k}"?`)) return;
       delete state.variables[k];
       await persistVariables();
       renderVariables();
@@ -814,7 +814,7 @@ async function onImportFile(e) {
     const variables = (json.variables && typeof json.variables === "object") ? json.variables : {};
     const settings = json.settings || state.settings;
 
-    if (!confirm(`가져오면 현재 스니펫이 ${snippets.length}개로 바뀝니다. 진행할까요?`)) return;
+    if (!confirm(`if you import, the current snippets will be changed to ${snippets.length}. do you want to proceed?`)) return;
 
     state.snippets = snippets;
     state.variables = variables;
@@ -829,7 +829,7 @@ async function onImportFile(e) {
     fillForm(getEditingSnippet() || blankSnippet());
     renderAll();
   } catch {
-    alert("가져오기 실패: JSON 파일을 확인해 주세요.");
+    alert("import failed: please check the JSON file.");
   } finally {
     $("#filePicker").value = "";
   }
