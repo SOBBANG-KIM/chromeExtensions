@@ -10,7 +10,8 @@ const state = {
   search: "",
   draggingTabId: null,
   theme: "dark",             // "dark" | "light" | "purple" | "blue" | "teal" | "green" | "orange" | "pink" | "magenta"
-  pinnedTabs: new Set()      // 고정된 탭 ID들
+  pinnedTabs: new Set(),      // 고정된 탭 ID들
+  tabNotes: {}                // { tabId: "메모 내용" }
 };
 
 init();
@@ -20,7 +21,7 @@ async function init() {
   state.windowId = win.id;
 
   // Load saved settings
-  const saved = await chrome.storage.local.get(["theme", "pinnedTabs"]);
+  const saved = await chrome.storage.local.get(["theme", "pinnedTabs", "tabNotes"]);
   
   // theme load
   const validThemes = ["dark", "light", "purple", "blue", "teal", "green", "orange", "pink", "magenta"];
@@ -37,6 +38,11 @@ async function init() {
   // 고정된 탭 로드
   if (Array.isArray(saved.pinnedTabs)) {
     state.pinnedTabs = new Set(saved.pinnedTabs);
+  }
+
+  // 탭 메모 로드
+  if (saved.tabNotes && typeof saved.tabNotes === "object") {
+    state.tabNotes = saved.tabNotes;
   }
 
   $("#search").addEventListener("input", (e) => {
@@ -61,6 +67,14 @@ async function init() {
     await sortUngroupedByDomainOnce();
     await load();
     render();
+    
+    // 정렬 완료 피드백
+    const sortBtn = $("#sortDomain");
+    sortBtn.classList.add("sorted");
+    
+    setTimeout(() => {
+      sortBtn.classList.remove("sorted");
+    }, 2000);
   });
 
   $("#makeGroup").addEventListener("click", async () => {
@@ -68,6 +82,18 @@ async function init() {
     await load();
     render();
   });
+
+  $("#saveTabList").addEventListener("click", async () => {
+    await saveTabList();
+  });
+
+  $("#deleteSavedTabList").addEventListener("click", async () => {
+    await deleteSavedTabList();
+  });
+
+
+  // 저장된 탭 리스트 복원 (크롬 첫 오픈 시)
+  await checkAndRestoreTabList();
 
   await load();
   render();
@@ -684,19 +710,22 @@ function renderTabItem(tab) {
   const isPinned = state.pinnedTabs.has(tab.id);
   const pinIcon = document.createElement("div");
   pinIcon.className = "pinIcon";
+  pinIcon.title = isPinned ? "Unpin" : "Pin";
   pinIcon.innerHTML = `
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <line x1="12" x2="12" y1="17" y2="22"></line>
       <path d="M5 17h14v-3.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 13.24Z"></path>
     </svg>
   `;
-  pinIcon.title = isPinned ? "고정 해제" : "고정";
   if (isPinned) {
     pinIcon.classList.add("pinned");
   }
   pinIcon.addEventListener("click", async (e) => {
     e.stopPropagation();
     await togglePinTab(tab.id);
+    // 툴팁 업데이트
+    const newIsPinned = state.pinnedTabs.has(tab.id);
+    pinIcon.title = newIsPinned ? "Unpin" : "Pin";
   });
 
   // favicon
@@ -719,8 +748,20 @@ function renderTabItem(tab) {
   sub.className = "subText";
   sub.textContent = normalizeDomain(tab.url) + " • " + (tab.url || "");
 
+  // 메모 표시
+  const noteText = document.createElement("div");
+  noteText.className = "noteText";
+  const note = state.tabNotes[tab.id] || "";
+  if (note) {
+    noteText.textContent = note;
+    noteText.style.display = "block";
+  } else {
+    noteText.style.display = "none";
+  }
+
   titleCol.appendChild(title);
   titleCol.appendChild(sub);
+  titleCol.appendChild(noteText);
 
   // 도메인 복사 버튼 (copy link 아이콘)
   const copyDomainBtn = document.createElement("button");
@@ -753,18 +794,37 @@ function renderTabItem(tab) {
         await navigator.clipboard.writeText(domainUrl);
         
         // Copy complete 효과
-        const originalTitle = copyDomainBtn.title;
-        copyDomainBtn.title = "Copy complete!";
         copyDomainBtn.classList.add("copied");
         
         setTimeout(() => {
-          copyDomainBtn.title = originalTitle;
           copyDomainBtn.classList.remove("copied");
         }, 2000);
       }
     } catch (error) {
       console.error("Failed to copy domain:", error);
     }
+  });
+
+  // 메모 버튼
+  const noteBtn = document.createElement("button");
+  noteBtn.className = "noteBtn";
+  noteBtn.setAttribute("data-tab-id", tab.id);
+  noteBtn.title = note ? "Edit note" : "Add note";
+  if (note) {
+    noteBtn.classList.add("hasNote");
+  }
+  noteBtn.innerHTML = `
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+      <polyline points="14 2 14 8 20 8"></polyline>
+      <line x1="16" x2="8" y1="13" y2="13"></line>
+      <line x1="16" x2="8" y1="17" y2="17"></line>
+      <polyline points="10 9 9 9 8 9"></polyline>
+    </svg>
+  `;
+  noteBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    await showNoteModal(tab.id, note, noteText);
   });
 
   // 새 탭 생성 버튼 (copy 아이콘)
@@ -815,7 +875,9 @@ function renderTabItem(tab) {
     await chrome.tabs.remove(tab.id);
     state.selected.delete(tab.id);
     state.pinnedTabs.delete(tab.id);
+    delete state.tabNotes[tab.id];
     await savePinnedTabs();
+    await saveTabNotes();
     await load();
     render();
   });
@@ -830,6 +892,7 @@ function renderTabItem(tab) {
   row.appendChild(img);
   row.appendChild(titleCol);
   row.appendChild(copyDomainBtn);
+  row.appendChild(noteBtn);
   row.appendChild(newTabBtn);
   row.appendChild(close);
 
@@ -894,7 +957,13 @@ async function movePinnedTabBefore(sourceId, targetId) {
 async function makeGroupFromSelected() {
   const tabIds = [...state.selected].filter(Number.isFinite);
   if (tabIds.length < 2) {
-    alert("그룹은 최소 2개 탭을 선택해 주세요.");
+    // 알럿 대신 툴팁 표시
+    const makeGroupBtn = $("#makeGroup");
+    makeGroupBtn.classList.add("needMoreTabs");
+    
+    setTimeout(() => {
+      makeGroupBtn.classList.remove("needMoreTabs");
+    }, 2000);
     return;
   }
 
@@ -908,6 +977,14 @@ async function makeGroupFromSelected() {
   await chrome.tabGroups.update(groupId, { title, color });
 
   state.selected.clear();
+  
+  // 그룹 생성 완료 피드백
+  const makeGroupBtn = $("#makeGroup");
+  makeGroupBtn.classList.add("groupCreated");
+  
+  setTimeout(() => {
+    makeGroupBtn.classList.remove("groupCreated");
+  }, 2000);
 }
 
 async function ungroupByGroupId(groupId) {
@@ -1049,6 +1126,12 @@ async function savePinnedTabs() {
   });
 }
 
+async function saveTabNotes() {
+  await chrome.storage.local.set({ 
+    tabNotes: state.tabNotes 
+  });
+}
+
 
 // 그룹명 편집 기능
 async function editGroupTitle(groupId, titleSpan, badgeSpan) {
@@ -1126,4 +1209,349 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]));
+}
+
+// 현재 탭 리스트 저장
+async function saveTabList() {
+  await load();
+  
+  const tabs = state.tabs.sort((a, b) => a.index - b.index);
+  const groups = state.groups;
+  
+  // 저장할 탭 정보 구성
+  const savedTabs = tabs.map(tab => ({
+    url: tab.url,
+    title: tab.title,
+    pinned: state.pinnedTabs.has(tab.id),
+    groupId: tab.groupId !== -1 ? tab.groupId : null,
+    note: state.tabNotes[tab.id] || null,
+    index: tab.index
+  }));
+  
+  // 저장할 그룹 정보 구성
+  const savedGroups = groups.map(group => ({
+    id: group.id,
+    title: group.title,
+    color: group.color,
+    collapsed: group.collapsed
+  }));
+  
+  const savedData = {
+    tabs: savedTabs,
+    groups: savedGroups,
+    savedAt: Date.now()
+  };
+  
+  await chrome.storage.local.set({ savedTabList: savedData });
+  
+  // 저장 완료 피드백
+  const saveBtn = $("#saveTabList");
+  const originalTitle = saveBtn.title;
+  saveBtn.classList.add("saved");
+  
+  setTimeout(() => {
+    saveBtn.classList.remove("saved");
+  }, 2000);
+}
+
+// 저장된 탭 리스트 삭제
+async function deleteSavedTabList() {
+  const saved = await chrome.storage.local.get(["savedTabList"]);
+  
+  if (!saved.savedTabList || !saved.savedTabList.tabs || saved.savedTabList.tabs.length === 0) {
+    // 저장된 리스트가 없으면 피드백만 표시
+    const deleteBtn = $("#deleteSavedTabList");
+    deleteBtn.classList.add("noSaved");
+    
+    setTimeout(() => {
+      deleteBtn.classList.remove("noSaved");
+    }, 2000);
+    return;
+  }
+  
+  // 저장된 리스트 삭제
+  await chrome.storage.local.remove(["savedTabList"]);
+  
+  // 삭제 완료 피드백
+  const deleteBtn = $("#deleteSavedTabList");
+  deleteBtn.classList.add("deleted");
+  
+  setTimeout(() => {
+    deleteBtn.classList.remove("deleted");
+  }, 2000);
+}
+
+// 저장된 탭 리스트 복원
+async function checkAndRestoreTabList() {
+  const saved = await chrome.storage.local.get(["savedTabList"]);
+  
+  if (!saved.savedTabList || !saved.savedTabList.tabs || saved.savedTabList.tabs.length === 0) {
+    return; // 저장된 리스트가 없으면 복원하지 않음
+  }
+  
+  // 현재 탭 개수 확인
+  const currentTabs = await chrome.tabs.query({ windowId: state.windowId });
+  
+  // 새 탭 페이지를 제외한 실제 탭 개수 확인
+  const realTabs = currentTabs.filter(tab => 
+    tab.url && 
+    !tab.url.startsWith("chrome://") && 
+    !tab.url.startsWith("chrome-extension://") &&
+    tab.url !== "about:newtab" &&
+    tab.url !== "about:blank"
+  );
+  
+  // 실제 탭이 1개 이하일 때만 복원 (크롬 첫 오픈 시)
+  if (realTabs.length > 1) {
+    return; // 이미 탭이 있으면 복원하지 않음
+  }
+  
+  await restoreTabList(saved.savedTabList);
+}
+
+async function restoreTabList(savedData) {
+  if (!savedData || !savedData.tabs || savedData.tabs.length === 0) {
+    return;
+  }
+  
+  try {
+    // 1. 모든 탭 생성 (pinned 상태 포함)
+    const createdTabs = [];
+    for (const savedTab of savedData.tabs) {
+      try {
+        const newTab = await chrome.tabs.create({
+          url: savedTab.url,
+          active: false,
+          pinned: savedTab.pinned || false
+        });
+        createdTabs.push({
+          id: newTab.id,
+          url: savedTab.url,
+          pinned: savedTab.pinned || false,
+          groupId: savedTab.groupId,
+          note: savedTab.note,
+          originalIndex: savedTab.index
+        });
+      } catch (error) {
+        console.error("Failed to restore tab:", error);
+      }
+    }
+    
+    // 2. 그룹별로 탭 묶기
+    const groupMap = new Map(); // oldGroupId -> { newGroupId, title, color }
+    
+    if (savedData.groups && savedData.groups.length > 0) {
+      for (const savedGroup of savedData.groups) {
+        const groupTabs = createdTabs.filter(t => t.groupId === savedGroup.id);
+        if (groupTabs.length > 0) {
+          try {
+            const tabIds = groupTabs.map(t => t.id);
+            const newGroupId = await chrome.tabs.group({ tabIds });
+            await chrome.tabGroups.update(newGroupId, {
+              title: savedGroup.title,
+              color: savedGroup.color
+            });
+            
+            groupMap.set(savedGroup.id, {
+              newGroupId,
+              title: savedGroup.title,
+              color: savedGroup.color
+            });
+          } catch (error) {
+            console.error("Failed to create group:", error);
+          }
+        }
+      }
+    }
+    
+    // 3. 탭 순서 정렬 (원래 순서대로)
+    await load();
+    const allTabs = state.tabs.sort((a, b) => a.index - b.index);
+    
+    // 원래 순서대로 탭 ID 배열 생성
+    const tabOrder = [];
+    for (const savedTab of savedData.tabs) {
+      const tab = allTabs.find(t => t.url === savedTab.url);
+      if (tab) {
+        tabOrder.push(tab.id);
+      }
+    }
+    
+    // 순서 재배치
+    if (tabOrder.length > 0) {
+      await reorderTabsInWindow(state.windowId, tabOrder);
+    }
+    
+    // 4. Pin 상태 복원
+    await load();
+    const restoredTabs = state.tabs;
+    for (const savedTab of savedData.tabs) {
+      if (savedTab.pinned) {
+        const tab = restoredTabs.find(t => t.url === savedTab.url);
+        if (tab) {
+          state.pinnedTabs.add(tab.id);
+        }
+      }
+    }
+    await savePinnedTabs();
+    
+    // 5. 메모 복원
+    await load();
+    const finalTabs = state.tabs;
+    for (const savedTab of savedData.tabs) {
+      if (savedTab.note) {
+        const tab = finalTabs.find(t => t.url === savedTab.url);
+        if (tab) {
+          state.tabNotes[tab.id] = savedTab.note;
+        }
+      }
+    }
+    await saveTabNotes();
+    
+    await load();
+    render();
+    
+  } catch (error) {
+    console.error("Failed to restore tab list:", error);
+  }
+}
+
+// 메모 모달 표시
+async function showNoteModal(tabId, currentNote, noteTextElement) {
+  // 기존 모달이 있으면 제거
+  const existingModal = document.getElementById("noteModal");
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  // 모달 생성
+  const modal = document.createElement("div");
+  modal.id = "noteModal";
+  modal.className = "noteModal";
+  
+  const modalContent = document.createElement("div");
+  modalContent.className = "noteModalContent";
+  
+  const modalHeader = document.createElement("div");
+  modalHeader.className = "noteModalHeader";
+  modalHeader.textContent = "메모 (최대 20자)";
+  
+  const textarea = document.createElement("textarea");
+  textarea.className = "noteTextarea";
+  textarea.value = currentNote || "";
+  textarea.maxLength = 20;
+  textarea.placeholder = "메모를 입력하세요...";
+  
+  const charCount = document.createElement("div");
+  charCount.className = "noteCharCount";
+  charCount.textContent = `${textarea.value.length}/20`;
+  
+  textarea.addEventListener("input", () => {
+    charCount.textContent = `${textarea.value.length}/20`;
+  });
+  
+  const modalActions = document.createElement("div");
+  modalActions.className = "noteModalActions";
+  
+  const saveBtn = document.createElement("button");
+  saveBtn.className = "noteSaveBtn";
+  saveBtn.textContent = "저장";
+  
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "noteDeleteBtn";
+  deleteBtn.textContent = "삭제";
+  if (!currentNote) {
+    deleteBtn.style.display = "none";
+  }
+  
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "noteCancelBtn";
+  cancelBtn.textContent = "취소";
+  
+  modalActions.appendChild(saveBtn);
+  if (currentNote) {
+    modalActions.appendChild(deleteBtn);
+  }
+  modalActions.appendChild(cancelBtn);
+  
+  modalContent.appendChild(modalHeader);
+  modalContent.appendChild(textarea);
+  modalContent.appendChild(charCount);
+  modalContent.appendChild(modalActions);
+  modal.appendChild(modalContent);
+  
+  document.body.appendChild(modal);
+  
+  // 포커스
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  
+  // 저장
+  saveBtn.addEventListener("click", async () => {
+    const note = textarea.value.trim();
+    if (note) {
+      state.tabNotes[tabId] = note;
+      noteTextElement.textContent = note;
+      noteTextElement.style.display = "block";
+    } else {
+      delete state.tabNotes[tabId];
+      noteTextElement.textContent = "";
+      noteTextElement.style.display = "none";
+    }
+    await saveTabNotes();
+    
+    // 버튼 상태 업데이트
+    const noteBtn = document.querySelector(`.noteBtn[data-tab-id="${tabId}"]`);
+    if (noteBtn) {
+      if (note) {
+        noteBtn.classList.add("hasNote");
+        noteBtn.title = "Edit note";
+      } else {
+        noteBtn.classList.remove("hasNote");
+        noteBtn.title = "Add note";
+      }
+    }
+    
+    modal.remove();
+    render(); // 전체 렌더링으로 버튼 상태 업데이트
+  });
+  
+  // 삭제
+  deleteBtn.addEventListener("click", async () => {
+    delete state.tabNotes[tabId];
+    noteTextElement.textContent = "";
+    noteTextElement.style.display = "none";
+    await saveTabNotes();
+    
+    // 버튼 상태 업데이트
+    const noteBtn = document.querySelector(`.noteBtn[data-tab-id="${tabId}"]`);
+    if (noteBtn) {
+      noteBtn.classList.remove("hasNote");
+      noteBtn.title = "Add note";
+    }
+    
+    modal.remove();
+    render(); // 전체 렌더링으로 버튼 상태 업데이트
+  });
+  
+  // 취소
+  cancelBtn.addEventListener("click", () => {
+    modal.remove();
+  });
+  
+  // 모달 외부 클릭 시 닫기
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      modal.remove();
+    }
+  });
+  
+  // ESC 키로 닫기
+  const handleEsc = (e) => {
+    if (e.key === "Escape") {
+      modal.remove();
+      document.removeEventListener("keydown", handleEsc);
+    }
+  };
+  document.addEventListener("keydown", handleEsc);
 }
