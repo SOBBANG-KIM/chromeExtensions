@@ -11,7 +11,7 @@ const BUILTIN_KEYS = new Set(["date","time","datetime","clipboard","selectedText
 const state = {
   snippets: [],
   variables: {},           // { key: value }
-  settings: { theme: "system" },
+  settings: { theme: "dark" },
   q: "",
   editingId: null,
   lastActiveTabId: null,
@@ -25,18 +25,20 @@ async function init() {
   const data = await chrome.storage.local.get({
     snippets: [],
     variables: {},
-    settings: { theme: "system" }
+    settings: { theme: "dark" }
   });
 
   state.snippets = normalizeSnippets(Array.isArray(data.snippets) ? data.snippets : []);
   state.variables = (data.variables && typeof data.variables === "object") ? data.variables : {};
-  state.settings = data.settings || { theme: "system" };
+  state.settings = data.settings || { theme: "dark" };
 
-  $("#theme").value = state.settings.theme || "system";
-  applyTheme(state.settings.theme || "system");
+  const initialTheme = normalizeTheme(state.settings.theme);
+  state.settings.theme = initialTheme;
+  $("#theme").value = initialTheme;
+  applyTheme(initialTheme);
 
   $("#theme").addEventListener("change", async () => {
-    state.settings.theme = $("#theme").value;
+    state.settings.theme = normalizeTheme($("#theme").value);
     await chrome.storage.local.set({ settings: state.settings });
     applyTheme(state.settings.theme);
     renderAll();
@@ -64,6 +66,14 @@ async function init() {
     fillForm(blankSnippet());
     highlightActive(null);
     updatePreviewForEditor();
+    openEditorModal();
+    focusTitleInput();
+  });
+
+  const openVariables = $("#openVariables");
+  if (openVariables) openVariables.addEventListener("click", () => {
+    openVariablesModal();
+    focusVariableKeyInput();
   });
 
   $("#save").addEventListener("click", onSave);
@@ -95,7 +105,7 @@ async function init() {
   });
 
   // live preview update when editing
-  ["title","tags","content","enabled","pinned"].forEach(id => {
+  ["title","tags","content","enabled"].forEach(id => {
     const el = $("#" + id);
     el.addEventListener("input", updatePreviewForEditor);
     el.addEventListener("change", updatePreviewForEditor);
@@ -109,9 +119,25 @@ async function init() {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) await submitModalAndInsert();
   });
 
-  $("#export").addEventListener("click", onExport);
-  $("#import").addEventListener("click", () => $("#filePicker").click());
-  $("#filePicker").addEventListener("change", onImportFile);
+  const editorBackdrop = $("#editorBackdrop");
+  if (editorBackdrop) editorBackdrop.addEventListener("click", closeEditorModal);
+  const editorClose = $("#editorClose");
+  if (editorClose) editorClose.addEventListener("click", closeEditorModal);
+  const variablesBackdrop = $("#variablesBackdrop");
+  if (variablesBackdrop) variablesBackdrop.addEventListener("click", closeVariablesModal);
+  const variablesClose = $("#variablesClose");
+  if (variablesClose) variablesClose.addEventListener("click", closeVariablesModal);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isEditorModalOpen()) closeEditorModal();
+    if (e.key === "Escape" && isVariablesModalOpen()) closeVariablesModal();
+  });
+
+  const exportBtn = $("#export");
+  if (exportBtn) exportBtn.addEventListener("click", onExport);
+  const importBtn = $("#import");
+  if (importBtn) importBtn.addEventListener("click", () => $("#filePicker").click());
+  const filePicker = $("#filePicker");
+  if (filePicker) filePicker.addEventListener("change", onImportFile);
 
   // If empty, create demo snippets
   if (state.snippets.length === 0) {
@@ -127,9 +153,57 @@ async function init() {
   renderAll();
 }
 
+const THEME_SET = new Set(["dark","light","purple","blue","teal","green","orange","pink","magenta"]);
+
+function normalizeTheme(theme) {
+  if (!theme || theme === "system") {
+    return window.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "light" : "dark";
+  }
+  return THEME_SET.has(theme) ? theme : "dark";
+}
+
 function applyTheme(theme) {
-  const isLight = theme === "light" || (theme === "system" && window.matchMedia?.("(prefers-color-scheme: light)")?.matches);
-  document.body.dataset.theme = isLight ? "light" : "dark";
+  document.body.dataset.theme = normalizeTheme(theme);
+}
+
+function isEditorModalOpen() {
+  const modal = $("#editorModal");
+  return !!(modal && modal.style.display !== "none");
+}
+
+function openEditorModal() {
+  const modal = $("#editorModal");
+  if (modal) modal.style.display = "block";
+}
+
+function closeEditorModal() {
+  const modal = $("#editorModal");
+  if (modal) modal.style.display = "none";
+}
+
+function focusTitleInput() {
+  const title = $("#title");
+  if (title) setTimeout(() => title.focus(), 0);
+}
+
+function isVariablesModalOpen() {
+  const modal = $("#variablesModal");
+  return !!(modal && modal.style.display !== "none");
+}
+
+function openVariablesModal() {
+  const modal = $("#variablesModal");
+  if (modal) modal.style.display = "block";
+}
+
+function closeVariablesModal() {
+  const modal = $("#variablesModal");
+  if (modal) modal.style.display = "none";
+}
+
+function focusVariableKeyInput() {
+  const key = $("#varKey");
+  if (key) setTimeout(() => key.focus(), 0);
 }
 
 function blankSnippet() {
@@ -205,17 +279,17 @@ function renderAll() {
 
 function renderLists() {
   const { pinned, normal } = getSortedSnippets(true);
-  renderListTo($("#pinnedList"), pinned, true);
-  renderListTo($("#list"), normal, false);
+  const merged = pinned.concat(normal);
+  renderListTo($("#list"), merged);
 }
 
-function renderListTo(container, items, isPinnedSection) {
+function renderListTo(container, items) {
   container.innerHTML = "";
 
   if (items.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = isPinnedSection ? "no pinned snippets" : "no snippets";
+    empty.textContent = "no snippets";
     container.appendChild(empty);
     return;
   }
@@ -237,6 +311,8 @@ function renderListTo(container, items, isPinnedSection) {
       fillForm(s);
       highlightActive(s.id);
       updatePreviewForEditor();
+      openEditorModal();
+      focusTitleInput();
     });
 
     el.addEventListener("dblclick", () => insertSnippetById(s.id));
@@ -275,7 +351,7 @@ function renderListTo(container, items, isPinnedSection) {
       const draggedId = e.dataTransfer.getData("text/plain");
       if (!draggedId || draggedId === s.id) return;
 
-      await reorderByDrop(draggedId, s.id, isPinnedSection);
+      await reorderByDrop(draggedId, s.id, s.pinned);
     });
 
     const top = document.createElement("div");
@@ -287,10 +363,16 @@ function renderListTo(container, items, isPinnedSection) {
     handle.title = dragEnabled ? "drag to reorder" : "dragging is disabled while searching";
     handle.addEventListener("click", (e) => e.stopPropagation());
 
-    const pin = document.createElement("button");
-    pin.className = "pinBtn" + (s.pinned ? " pinned" : "");
-    pin.textContent = "★";
-    pin.title = s.pinned ? "unpin" : "pin";
+    const pin = document.createElement("div");
+    pin.className = "pinIcon";
+    pin.title = s.pinned ? "Unpin" : "Pin";
+    pin.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" x2="12" y1="17" y2="22"></line>
+        <path d="M5 17h14v-3.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 13.24Z"></path>
+      </svg>
+    `;
+    if (s.pinned) pin.classList.add("pinned");
     pin.addEventListener("click", async (e) => {
       e.stopPropagation();
       await togglePin(s.id);
@@ -335,7 +417,8 @@ function renderListTo(container, items, isPinnedSection) {
     e.preventDefault();
     const draggedId = e.dataTransfer.getData("text/plain");
     if (!draggedId) return;
-    await reorderToEnd(draggedId, isPinnedSection);
+    const dragged = state.snippets.find(s => s.id === draggedId);
+    await reorderToEnd(draggedId, dragged?.pinned);
   });
 }
 
@@ -350,7 +433,6 @@ function fillForm(s) {
   $("#tags").value = (s.tags || []).join(", ");
   $("#content").value = s.content || "";
   $("#enabled").checked = s.enabled !== false;
-  $("#pinned").checked = s.pinned === true;
   $("#delete").disabled = !s.id;
 }
 
@@ -358,12 +440,13 @@ function readForm() {
   const title = $("#title").value.trim();
   const tags = $("#tags").value.split(",").map(x => x.trim()).filter(Boolean);
   const content = $("#content").value;
+  const pinned = getEditingSnippet()?.pinned ?? false;
   return {
     title,
     tags,
     content,
     enabled: $("#enabled").checked,
-    pinned: $("#pinned").checked
+    pinned
   };
 }
 
@@ -790,7 +873,7 @@ function renderVariables() {
 
 // ===== Import/Export =====
 async function onExport() {
-  const data = await chrome.storage.local.get({ snippets: [], variables: {}, settings: { theme: "system" } });
+  const data = await chrome.storage.local.get({ snippets: [], variables: {}, settings: { theme: "dark" } });
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
 
@@ -822,8 +905,10 @@ async function onImportFile(e) {
 
     await chrome.storage.local.set({ snippets, variables, settings });
 
-    $("#theme").value = state.settings.theme || "system";
-    applyTheme(state.settings.theme || "system");
+    const importedTheme = normalizeTheme(state.settings.theme);
+    state.settings.theme = importedTheme;
+    $("#theme").value = importedTheme;
+    applyTheme(importedTheme);
 
     state.editingId = firstSnippetId() || null;
     fillForm(getEditingSnippet() || blankSnippet());

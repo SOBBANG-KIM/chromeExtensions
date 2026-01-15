@@ -15,7 +15,7 @@
       snippets: [],
       filtered: [],
       cursor: 0,
-      theme: "system",
+      theme: "dark",
       variables: null,
       userVars: {}
     };
@@ -216,9 +216,9 @@
       const data = await chrome.storage.local.get({
         snippets: [],
         variables: {},
-        settings: { theme: "system" }
+        settings: { theme: "dark" }
       });
-      state.theme = data.settings?.theme || "system";
+      state.theme = normalizeTheme(data.settings?.theme);
       state.userVars = (data.variables && typeof data.variables === "object") ? data.variables : {};
 
       const all = Array.isArray(data.snippets) ? data.snippets : [];
@@ -227,9 +227,17 @@
         .sort((a,b) => (b.lastUsedAt||0) - (a.lastUsedAt||0) || (b.usageCount||0) - (a.usageCount||0));
     }
 
+    const THEME_SET = new Set(["dark","light","purple","blue","teal","green","orange","pink","magenta"]);
+
+    function normalizeTheme(theme) {
+      if (!theme || theme === "system") {
+        return window.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "light" : "dark";
+      }
+      return THEME_SET.has(theme) ? theme : "dark";
+    }
+
     function applyTheme() {
-      const isLight = state.theme === "light" || (state.theme === "system" && window.matchMedia?.("(prefers-color-scheme: light)")?.matches);
-      qs("#ts-wrap").dataset.theme = isLight ? "light" : "dark";
+      qs("#ts-wrap").dataset.theme = normalizeTheme(state.theme);
     }
 
     function filterAndRender(q) {
@@ -543,25 +551,97 @@
     }
 
     #ts-wrap[data-theme="dark"]{
-      --bg: rgba(0,0,0,0.55);
+      --bg: #0b0b0f;
       --card: #12121a;
-      --text: #e8e8ef;
       --muted: #a7a7b3;
-      --line: rgba(255,255,255,0.10);
+      --text: #e8e8ef;
+      --line: rgba(255,255,255,0.08);
       --accent: #5b8cff;
-      --accentBg: rgba(91,140,255,0.14);
+      --accentBg: rgba(91,140,255,0.12);
+      --overlay: rgba(0,0,0,0.55);
     }
     #ts-wrap[data-theme="light"]{
-      --bg: rgba(10,10,10,0.22);
+      --bg: #f6f7fb;
       --card: #ffffff;
-      --text: #12131a;
       --muted: #5b5f6b;
-      --line: rgba(10,10,10,0.14);
+      --text: #12131a;
+      --line: rgba(10,10,10,0.10);
       --accent: #2b63ff;
       --accentBg: rgba(43,99,255,0.10);
+      --overlay: rgba(10,10,10,0.22);
+    }
+    #ts-wrap[data-theme="purple"]{
+      --bg: #0f0b15;
+      --card: #1a1325;
+      --muted: #b8a7c3;
+      --text: #e8dff0;
+      --line: rgba(255,255,255,0.08);
+      --accent: #a855f7;
+      --accentBg: rgba(168,85,247,0.15);
+      --overlay: rgba(0,0,0,0.55);
+    }
+    #ts-wrap[data-theme="blue"]{
+      --bg: #0b0f15;
+      --card: #121825;
+      --muted: #a7b8c3;
+      --text: #dfe8f0;
+      --line: rgba(255,255,255,0.08);
+      --accent: #3b82f6;
+      --accentBg: rgba(59,130,246,0.15);
+      --overlay: rgba(0,0,0,0.55);
+    }
+    #ts-wrap[data-theme="teal"]{
+      --bg: #0b1515;
+      --card: #122525;
+      --muted: #a7c3c3;
+      --text: #dff0f0;
+      --line: rgba(255,255,255,0.08);
+      --accent: #14b8a6;
+      --accentBg: rgba(20,184,166,0.15);
+      --overlay: rgba(0,0,0,0.55);
+    }
+    #ts-wrap[data-theme="green"]{
+      --bg: #0b150f;
+      --card: #122518;
+      --muted: #a7c3b8;
+      --text: #dff0e8;
+      --line: rgba(255,255,255,0.08);
+      --accent: #22c55e;
+      --accentBg: rgba(34,197,94,0.15);
+      --overlay: rgba(0,0,0,0.55);
+    }
+    #ts-wrap[data-theme="orange"]{
+      --bg: #15100b;
+      --card: #251812;
+      --muted: #c3b8a7;
+      --text: #f0e8df;
+      --line: rgba(255,255,255,0.08);
+      --accent: #f97316;
+      --accentBg: rgba(249,115,22,0.15);
+      --overlay: rgba(0,0,0,0.55);
+    }
+    #ts-wrap[data-theme="pink"]{
+      --bg: #150b12;
+      --card: #251218;
+      --muted: #c3a7b8;
+      --text: #f0dfe8;
+      --line: rgba(255,255,255,0.08);
+      --accent: #ec4899;
+      --accentBg: rgba(236,72,153,0.15);
+      --overlay: rgba(0,0,0,0.55);
+    }
+    #ts-wrap[data-theme="magenta"]{
+      --bg: #150b15;
+      --card: #251225;
+      --muted: #c3a7c3;
+      --text: #f0dff0;
+      --line: rgba(255,255,255,0.08);
+      --accent: #d946ef;
+      --accentBg: rgba(217,70,239,0.15);
+      --overlay: rgba(0,0,0,0.55);
     }
 
-    #ts-backdrop{ position: fixed; inset: 0; background: var(--bg); }
+    #ts-backdrop{ position: fixed; inset: 0; background: var(--overlay); }
 
     #ts-card{
       position: fixed;
@@ -732,9 +812,9 @@
         <div class="top">
           <div class="qWrap">
             <input id="ts-q" class="q" placeholder="스니펫 검색… (↑↓ 이동, Enter 삽입, Esc 닫기)" />
-            <button id="ts-clear" class="iconBtn" title="지우기" aria-label="지우기">×</button>
+            <button id="ts-clear" class="iconBtn" title="Clear" aria-label="Clear">×</button>
           </div>
-          <button id="ts-close" class="btn" title="닫기">Esc</button>
+          <button id="ts-close" class="btn" title="Close">Esc</button>
         </div>
 
         <div class="body">
@@ -754,7 +834,7 @@
         <div class="top">
           <div style="font-weight:800;color:var(--text);">변수 입력</div>
           <div style="flex:1;"></div>
-          <button id="ts-close" class="btn" title="닫기">Esc</button>
+          <button id="ts-close" class="btn" title="Close">Esc</button>
         </div>
 
         <div class="varsWrap" id="ts-var-form">
@@ -762,8 +842,8 @@
           <div class="varsHint" id="ts-var-hint"></div>
           <div id="ts-var-fields"></div>
           <div class="varsActions">
-            <button class="btn" id="ts-var-cancel">뒤로</button>
-            <button class="btn primary" id="ts-var-ok">삽입 (Ctrl/Cmd+Enter)</button>
+            <button class="btn" id="ts-var-cancel">Back</button>
+            <button class="btn primary" id="ts-var-ok">Insert (Ctrl/Cmd+Enter)</button>
           </div>
         </div>
       </div>

@@ -8,52 +8,69 @@
 </head>
 <body>
   <header class="top">
-    <div class="brand">
-      <div class="logo">TS</div>
-      <div class="titles">
-        <div class="name">Today Snippet</div>
-        <div class="desc">클릭으로 스니펫 삽입 · 고정 · 드래그 정렬</div>
-      </div>
-    </div>
 
     <div class="row">
       <div class="searchWrap">
-        <input id="q" class="search" placeholder="검색 (제목/태그/본문)" />
-        <button id="clearQ" class="iconBtn" title="지우기" aria-label="지우기">×</button>
+        <input id="q" class="search" placeholder="Search" />
+        <button id="clearQ" class="iconBtn" title="Clear" aria-label="Clear Search">×</button>
       </div>
-      <button id="refreshContext" class="btn" title="현재 페이지 정보 갱신">갱신</button>
-    </div>
-
-    <div class="row">
-      <button id="new" class="btn primary">+ 새 스니펫</button>
-      <button id="export" class="btn">내보내기</button>
-      <button id="import" class="btn">가져오기</button>
-      <select id="theme" class="select" title="테마">
-        <option value="system">system</option>
-        <option value="light">light</option>
-        <option value="dark">dark</option>
+      <button id="refreshContext" class="btn icon-btn" title="Refresh">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+          <path d="M21 3v5h-5"></path>
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+          <path d="M3 21v-5h5"></path>
+        </svg>
+      </button>
+      <select id="theme" class="select" title="Theme">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="purple">Purple</option>
+        <option value="blue">Blue</option>
+        <option value="teal">Teal</option>
+        <option value="green">Green</option>
+        <option value="orange">Orange</option>
+        <option value="pink">Pink</option>
+        <option value="magenta">Magenta</option>
       </select>
     </div>
 
-    <div class="hint">
-      사용법: <b>페이지에서 입력칸을 한 번 클릭</b> → 여기서 스니펫을 <b>삽입</b>하세요.<br/>
-      목록은 <b>드래그</b>로 순서를 바꿀 수 있고, <b>★ 고정</b>하면 위에 고정됩니다.
+    <div class="row">
+      <button id="new" class="btn primary">+ New Snippet</button>
+      <button id="openVariables" class="btn">+ Add Variables</button>
     </div>
+
   </header>
 
   <main class="main">
     <section class="card">
       <div class="sectionTitle">스니펫 목록</div>
-
-      <div class="subSectionTitle">고정 (★)</div>
-      <div id="pinnedList" class="list"></div>
-
-      <div class="subSectionTitle">일반</div>
       <div id="list" class="list"></div>
     </section>
 
-    <section class="card">
-      <div class="sectionTitle">스니펫 편집</div>
+  </main>
+
+  <div id="modal" class="modal" style="display:none;">
+    <div class="modalBackdrop"></div>
+    <div class="modalCard" role="dialog" aria-modal="true">
+      <div class="modalTitle">필수 변수 입력</div>
+      <div class="modalDesc">아래 값을 채우면 문구에 자동으로 들어가요. (Ctrl/Cmd+Enter = 삽입)</div>
+      <div id="varFields" class="varFields"></div>
+      <div class="modalActions">
+        <button id="modalCancel" class="btn">Cancel</button>
+        <button id="modalOk" class="btn primary">Insert</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editorModal" class="modal" style="display:none;">
+    <div id="editorBackdrop" class="modalBackdrop"></div>
+    <div class="modalCard editorModalCard" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <div class="modalTitle">Snippet Editor</div>
+        <button id="editorClose" class="modalClose" type="button" aria-label="Close">×</button>
+      </div>
+
       <div class="form">
         <label class="label">제목</label>
         <input id="title" class="input" />
@@ -62,13 +79,6 @@
         <input id="tags" class="input" placeholder="CS, 환불, FAQ" />
 
         <div class="row2">
-          <div>
-            <label class="label">고정(★)</label>
-            <label class="switch">
-              <input id="pinned" type="checkbox" />
-              <span class="slider"></span>
-            </label>
-          </div>
           <div>
             <label class="label">사용</label>
             <label class="switch">
@@ -79,14 +89,14 @@
         </div>
 
         <label class="label">본문</label>
-        <textarea id="content" class="textarea" rows="10"
+        <textarea id="content" class="textarea" rows="5"
           placeholder="예) 안녕하세요 {{name}}님,&#10;요청하신 내용 확인했습니다.&#10;{{date}} 기준으로 안내드립니다."></textarea>
 
         <div class="actions">
-          <button id="insert" class="btn primary big">이 스니펫 삽입</button>
+          <button id="insert" class="btn primary big">Insert Snippet</button>
           <div class="spacer"></div>
-          <button id="delete" class="btn danger" disabled>삭제</button>
-          <button id="save" class="btn">저장</button>
+          <button id="delete" class="btn danger" disabled>Delete</button>
+          <button id="save" class="btn">Save</button>
         </div>
 
         <div class="help">
@@ -98,36 +108,40 @@
           사용자 변수: 아래 “변수 관리”에 등록한 값도 바로 치환됩니다.
         </div>
       </div>
-    </section>
+    </div>
+  </div>
 
-    <section class="card">
-      <div class="sectionTitle">변수 관리</div>
+  <div id="variablesModal" class="modal" style="display:none;">
+    <div id="variablesBackdrop" class="modalBackdrop"></div>
+    <div class="modalCard variablesModalCard" role="dialog" aria-modal="true">
+      <div class="modalHeader">
+        <div class="modalTitle">Variables</div>
+        <button id="variablesClose" class="modalClose" type="button" aria-label="Close">×</button>
+      </div>
+
       <div class="form">
         <div class="varsHint">
-          변수는 <code>{{variable_name}}</code> 형태로 본문에 넣을 수 있어요. 예) <code>{{name}}</code>, <code>{{company}}</code><br/>
-          <b>영문/숫자/언더스코어</b>만 권장합니다. (예: <code>phone_number</code>)
+          변수는 <code>{{variable_name}}</code> 형태로 본문에 넣을 수 있어요. <br/>
+          <b>영문/숫자/언더스코어</b>만 권장합니다. (예: <code>phone_number</code>) <br/><br/>
+          예) <code>{{name}}</code>, <code>{{company}}</code><br/><br/>
+          내장 변수(등록 불필요): <br/>
+          <code>{{date}}</code> <br/>
+          <code>{{time}}</code> <br/>
+          <code>{{datetime}}</code> <br/>
+          <code>{{clipboard}}</code> <br/>
+          <code>{{selectedText}}</code> <br/>
+          <code>{{url}}</code> <br/>
+          <code>{{title}}</code> <br/>
+          <code>{{hostname}}</code><br/>
         </div>
 
         <div class="row">
           <input id="varKey" class="input" placeholder="키 예: name" />
           <input id="varValue" class="input" placeholder="값 예: 김철수" />
-          <button id="addVar" class="btn primary">추가</button>
+          <button id="addVar" class="btn primary">+</button>
         </div>
 
         <div id="varList" class="varList"></div>
-      </div>
-    </section>
-  </main>
-
-  <div id="modal" class="modal" style="display:none;">
-    <div class="modalBackdrop"></div>
-    <div class="modalCard" role="dialog" aria-modal="true">
-      <div class="modalTitle">필수 변수 입력</div>
-      <div class="modalDesc">아래 값을 채우면 문구에 자동으로 들어가요. (Ctrl/Cmd+Enter = 삽입)</div>
-      <div id="varFields" class="varFields"></div>
-      <div class="modalActions">
-        <button id="modalCancel" class="btn">취소</button>
-        <button id="modalOk" class="btn primary">삽입</button>
       </div>
     </div>
   </div>
