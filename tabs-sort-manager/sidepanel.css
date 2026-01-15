@@ -819,6 +819,10 @@ body[data-theme="magenta"] .sectionHeader {
   color: #f59e0b; /* amber/orange for better visibility */
 }
 
+.pinIcon.pinned svg {
+  fill: currentColor;
+}
+
 /* 테마별 pin 색상 조정 */
 body[data-theme="dark"] .pinIcon.pinned {
   color: #fbbf24; /* bright amber */
@@ -922,7 +926,7 @@ body[data-theme="light"] .favicon { background: rgba(10,10,10,0.06); }
 }
 
 .noteText {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--accent);
   margin-top: 4px;
   padding: 4px 8px;
@@ -933,6 +937,39 @@ body[data-theme="light"] .favicon { background: rgba(10,10,10,0.06); }
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+/* Light 모드를 제외한 모든 테마에서 메모 텍스트를 더 밝게 */
+body[data-theme="dark"] .noteText {
+  color: #7ba3ff; /* 더 밝은 파란색 */
+}
+
+body[data-theme="purple"] .noteText {
+  color: #c084fc; /* 더 밝은 보라색 */
+}
+
+body[data-theme="blue"] .noteText {
+  color: #60a5fa; /* 더 밝은 파란색 */
+}
+
+body[data-theme="teal"] .noteText {
+  color: #2dd4bf; /* 더 밝은 청록색 */
+}
+
+body[data-theme="green"] .noteText {
+  color: #4ade80; /* 더 밝은 초록색 */
+}
+
+body[data-theme="orange"] .noteText {
+  color: #fb923c; /* 더 밝은 주황색 */
+}
+
+body[data-theme="pink"] .noteText {
+  color: #f472b6; /* 더 밝은 핑크색 */
+}
+
+body[data-theme="magenta"] .noteText {
+  color: #e879f9; /* 더 밝은 마젠타색 */
 }
 
 .copyDomainBtn,
