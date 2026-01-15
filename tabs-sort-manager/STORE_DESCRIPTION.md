@@ -1,15 +1,6 @@
-# Chrome 웹스토어 게시용 설명
-
-## 짧은 설명 (Short Description)
-**132자 이내**
-
 ```
 사이드 패널에서 탭을 효율적으로 관리하세요. 도메인별 자동 정렬, 탭 고정, 메모, 그룹 관리, 검색, 9가지 테마를 제공합니다.
 ```
-
-## 자세한 설명 (Detailed Description)
-
-### 한국어 버전
 
 ```
 📋 탭 관리가 이렇게 쉬웠나요?
@@ -122,8 +113,6 @@ Tabs Sort Manager는 Chrome 사이드 패널에서 모든 탭을 한눈에 보�
 
 이제 수많은 탭 속에서 길을 잃지 마세요. Tabs Sort Manager로 브라우징을 더욱 효율적으로 만들어보세요!
 ```
-
-### English Version
 
 ```
 📋 Manage Your Tabs with Ease
@@ -272,33 +261,6 @@ Stop getting lost in countless tabs. Make your browsing more efficient with Tabs
 tabs, tab manager, tab organizer, productivity, browser, chrome extension, side panel, tab groups, domain sort, tab search, tab pin, tab notes, tab save, theme, dark mode, light mode, drag and drop, tab management
 ```
 
-## 스크린샷 설명 (Screenshot Descriptions)
-
-### 스크린샷 1: 메인 화면
-```
-사이드 패널에서 모든 탭을 도메인별로 분류하여 보여주는 메인 화면. 검색창, 새로고침, 테마 선택, 도메인별 자동정렬 버튼, 그룹 생성 버튼, 저장/삭제 버튼이 상단에 표시됩니다. 각 탭에는 Pin, 도메인 복사, 메모, 새 탭 생성 아이콘이 표시됩니다.
-```
-
-### 스크린샷 2: 탭 그룹 관리
-```
-탭 그룹 개요 섹션과 그룹별 탭 목록. 그룹 칩을 클릭하면 해당 그룹으로 이동하고, 그룹 헤더에서 Ungroup 버튼으로 그룹을 해제할 수 있습니다. 그룹 이름을 클릭하여 편집할 수 있고, 접기/펼치기 버튼으로 그룹을 관리할 수 있습니다. 그룹 색상이 시각적으로 강조되어 표시됩니다.
-```
-
-### 스크린샷 3: 검색 및 고정 기능
-```
-검색창에 키워드를 입력하면 실시간으로 필터링된 탭 목록이 표시됩니다. Pin 아이콘이 활성화된 고정된 탭들이 상단에 표시되고, filled 스타일 아이콘으로 구분됩니다. 탭 제목, URL, 도메인, 그룹명에서 검색이 가능합니다.
-```
-
-### 스크린샷 4: 드래그 앤 드롭 및 메모
-```
-탭을 드래그하여 다른 위치로 이동하거나 그룹 헤더에 드롭하여 그룹에 추가하는 모습. 탭에 추가된 메모가 색상 강조되어 표시되고, 각 탭의 액션 버튼들(도메인 복사, 메모, 새 탭 생성)이 보입니다.
-```
-
-### 스크린샷 5: 테마 및 설정
-```
-9가지 테마 선택 드롭다운과 다양한 색상 테마 적용 모습. 각 테마별로 최적화된 색상 조합이 적용되어 있습니다.
-```
-
 ## 지원 정보
 
 ### 지원 언어
@@ -330,7 +292,8 @@ tabs, tab manager, tab organizer, productivity, browser, chrome extension, side 
 - 그룹 색상 시각적 강조
 - 검색창 초기화 및 새로고침 기능
 
-## 연락처 정보 (선택사항)
+## 연락처 정보
+kox0817@gmail.com
 
 ```
 이 확장 프로그램에 대한 피드백이나 문의사항이 있으시면 GitHub 이슈를 통해 알려주세요.
