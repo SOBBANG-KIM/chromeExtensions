@@ -178,6 +178,8 @@ body[data-theme="magenta"] .top {
 .titles .desc{ font-size: 12px; color: var(--muted); margin-top: 2px; }
 
 .row{ display:flex; gap: 8px; align-items:center; margin-bottom: 8px; }
+.headerRow{ flex-wrap: wrap; row-gap: 6px; }
+.headerRow .searchWrap{ flex: 1 1 180px; min-width: 140px; }
 .searchWrap{ position: relative; flex: 1; }
 .search{
   width: 100%;
@@ -223,7 +225,7 @@ body[data-theme="light"] .iconBtn:hover {
   background: var(--card);
   color: var(--text);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   min-width: 36px;
   display: inline-flex;
@@ -310,7 +312,6 @@ body[data-theme="light"] .btn.icon-btn:hover{
 }
 
 .list{
-  padding: 10px;
   display:flex;
   flex-direction: column;
   gap: 8px;
@@ -334,19 +335,6 @@ body[data-theme="light"] .item:hover{ border-color: rgba(10,10,10,0.20); }
 }
 
 .itemTop{ display:flex; align-items:center; gap: 8px; }
-.dragHandle{
-  width: 26px;
-  height: 26px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  display:grid;
-  place-items:center;
-  color: var(--muted);
-  cursor: grab;
-  user-select:none;
-}
-.dragHandle:active{ cursor: grabbing; }
-
 .pinIcon {
   width: 20px;
   height: 18px;
@@ -419,23 +407,72 @@ body[data-theme="magenta"] .pinIcon.pinned {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.badge{
+.itemCreatedAt{
   font-size: 11px;
   color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 2px 6px;
-}
-
-.itemMeta{
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: 11px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin-left: 6px;
 }
 
+.itemActions{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+}
+.itemActionBtn{
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+.itemActionBtn:hover{
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  transform: scale(1.05);
+}
+.itemActionBtn.copied{
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  position: relative;
+}
+.itemActionBtn.copied::after{
+  content: "Copied!";
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--card);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  pointer-events: none;
+  animation: fadeInOut 1.2s ease;
+}
+.itemActionBtn.danger{
+  color: #ff4444;
+  border-color: rgba(255,95,95,0.35);
+}
+.itemActionBtn.danger:hover{
+  background: color-mix(in srgb, #ff4444 15%, transparent);
+  border-color: #ff4444;
+}
+.itemActionBtn svg{
+  width: 14px;
+  height: 14px;
+}
 .itemPreview{
   margin-top: 8px;
   border-top: 1px dashed var(--line);
@@ -444,8 +481,8 @@ body[data-theme="magenta"] .pinIcon.pinned {
   font-size: 12.5px;
   line-height: 1.35;
   white-space: pre-wrap;
-  max-height: 4.1em;
-  overflow: hidden;
+  max-height: 9.2em;
+  overflow: auto;
 }
 
 .empty{
@@ -497,6 +534,17 @@ body[data-theme="magenta"] .pinIcon.pinned {
   margin-top: 6px;
 }
 .spacer{ flex: 1; }
+.editorModalCard .actions .btn:hover,
+.variablesModalCard .actions .btn:hover{
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  transform: scale(1.03);
+}
+.editorModalCard .actions,
+.variablesModalCard .actions{
+  justify-content: flex-end;
+}
 
 .help{
   color: var(--muted);
@@ -640,11 +688,17 @@ body[data-theme="light"] .modalBackdrop{ background: rgba(0,0,0,0.28); }
   width: min(900px, calc(100vw - 24px));
   max-height: calc(100vh - 120px);
   overflow: auto;
+  background: color-mix(in srgb, var(--card) 80%, var(--accent) 20%);
 }
 .variablesModalCard{
   width: min(720px, calc(100vw - 24px));
   max-height: calc(100vh - 160px);
   overflow: auto;
+  background: color-mix(in srgb, var(--card) 80%, var(--accent) 20%);
+}
+body[data-theme="light"] .editorModalCard,
+body[data-theme="light"] .variablesModalCard{
+  background: var(--card);
 }
 .modalHeader{
   display: flex;

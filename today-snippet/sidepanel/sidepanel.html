@@ -9,7 +9,7 @@
 <body>
   <header class="top">
 
-    <div class="row">
+    <div class="row headerRow">
       <div class="searchWrap">
         <input id="q" class="search" placeholder="Search" />
         <button id="clearQ" class="iconBtn" title="Clear" aria-label="Clear Search">×</button>
@@ -43,11 +43,7 @@
   </header>
 
   <main class="main">
-    <section class="card">
-      <div class="sectionTitle">스니펫 목록</div>
-      <div id="list" class="list"></div>
-    </section>
-
+    <div id="list" class="list"></div>
   </main>
 
   <div id="modal" class="modal" style="display:none;">
@@ -67,36 +63,20 @@
     <div id="editorBackdrop" class="modalBackdrop"></div>
     <div class="modalCard editorModalCard" role="dialog" aria-modal="true">
       <div class="modalHeader">
-        <div class="modalTitle">Snippet Editor</div>
+        <div class="modalTitle">Snippet</div>
         <button id="editorClose" class="modalClose" type="button" aria-label="Close">×</button>
       </div>
 
       <div class="form">
-        <label class="label">제목</label>
+        <label class="label">제목(title)</label>
         <input id="title" class="input" />
 
-        <label class="label">태그 (쉼표)</label>
-        <input id="tags" class="input" placeholder="CS, 환불, FAQ" />
-
-        <div class="row2">
-          <div>
-            <label class="label">사용</label>
-            <label class="switch">
-              <input id="enabled" type="checkbox" checked />
-              <span class="slider"></span>
-            </label>
-          </div>
-        </div>
-
-        <label class="label">본문</label>
+        <label class="label">본문(content)</label>
         <textarea id="content" class="textarea" rows="5"
           placeholder="예) 안녕하세요 {{name}}님,&#10;요청하신 내용 확인했습니다.&#10;{{date}} 기준으로 안내드립니다."></textarea>
 
         <div class="actions">
-          <button id="insert" class="btn primary big">Insert Snippet</button>
-          <div class="spacer"></div>
-          <button id="delete" class="btn danger" disabled>Delete</button>
-          <button id="save" class="btn">Save</button>
+          <button id="save" class="btn">Create</button>
         </div>
 
         <div class="help">
@@ -122,23 +102,21 @@
       <div class="form">
         <div class="varsHint">
           변수는 <code>{{variable_name}}</code> 형태로 본문에 넣을 수 있어요. <br/>
-          <b>영문/숫자/언더스코어</b>만 권장합니다. (예: <code>phone_number</code>) <br/><br/>
-          예) <code>{{name}}</code>, <code>{{company}}</code><br/><br/>
-          내장 변수(등록 불필요): <br/>
-          <code>{{date}}</code> <br/>
-          <code>{{time}}</code> <br/>
-          <code>{{datetime}}</code> <br/>
-          <code>{{clipboard}}</code> <br/>
-          <code>{{selectedText}}</code> <br/>
-          <code>{{url}}</code> <br/>
-          <code>{{title}}</code> <br/>
-          <code>{{hostname}}</code><br/>
+          <b>영문/숫자/언더스코어</b>만 권장합니다.<br/><br/>
+          예) <code>{{name}}</code>, <code>{{phone_number}}</code><br/><br/>
+          <div id="builtinVarsBlock">
+            내장 변수(등록 불필요): <br/>
+            <div id="builtinVarsList"></div>
+          </div>
         </div>
 
-        <div class="row">
-          <input id="varKey" class="input" placeholder="키 예: name" />
-          <input id="varValue" class="input" placeholder="값 예: 김철수" />
-          <button id="addVar" class="btn primary">+</button>
+        <div class="row" style="margin-bottom: 0;">
+          <input id="varKey" class="input" placeholder="key ex) name" />
+          <input id="varValue" class="input" placeholder="value ex) 김철수" />
+        </div>
+
+        <div class="actions">
+          <button id="addVar" class="btn">Create</button>
         </div>
 
         <div id="varList" class="varList"></div>

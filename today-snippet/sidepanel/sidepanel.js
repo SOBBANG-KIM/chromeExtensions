@@ -77,16 +77,25 @@ async function init() {
   });
 
   $("#save").addEventListener("click", onSave);
-  $("#delete").addEventListener("click", onDelete);
+  const deleteBtn = $("#delete");
+  if (deleteBtn) deleteBtn.addEventListener("click", onDelete);
 
-  $("#insert").addEventListener("click", async () => {
-    const s = getEditingSnippet();
-    if (!s?.id) {
-      alert("please select a saved snippet");
-      return;
-    }
-    await insertSnippetById(s.id);
-  });
+  const insertBtn = $("#insert");
+  if (insertBtn) {
+    insertBtn.addEventListener("click", async () => {
+      let s = getEditingSnippet();
+      if (!s?.id) {
+        await onSave();
+        s = getEditingSnippet();
+      }
+      if (!s?.id) {
+        alert("please save the snippet first");
+        return;
+      }
+      await insertSnippetById(s.id);
+      closeEditorModal();
+    });
+  }
 
   // Variables manager
   $("#addVar").addEventListener("click", async () => {
@@ -105,7 +114,7 @@ async function init() {
   });
 
   // live preview update when editing
-  ["title","tags","content","enabled"].forEach(id => {
+  ["title","content"].forEach(id => {
     const el = $("#" + id);
     el.addEventListener("input", updatePreviewForEditor);
     el.addEventListener("change", updatePreviewForEditor);
@@ -166,6 +175,36 @@ function applyTheme(theme) {
   document.body.dataset.theme = normalizeTheme(theme);
 }
 
+function formatDateTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+}
+
+async function copySnippetContent(snippet, anchorEl) {
+  const builtins = getBuiltinsSync(state.pageContext);
+  const values = { ...builtins, ...state.variables };
+  const text = applyTemplate(String(snippet?.content ?? ""), values, "empty");
+  try {
+    await navigator.clipboard.writeText(text);
+    showCopyTooltip(anchorEl);
+  } catch {
+    alert("failed to copy to clipboard");
+  }
+}
+
+function showCopyTooltip(anchorEl) {
+  if (!anchorEl) return;
+  anchorEl.classList.add("copied");
+  setTimeout(() => anchorEl.classList.remove("copied"), 1200);
+}
+
 function isEditorModalOpen() {
   const modal = $("#editorModal");
   return !!(modal && modal.style.display !== "none");
@@ -184,6 +223,12 @@ function closeEditorModal() {
 function focusTitleInput() {
   const title = $("#title");
   if (title) setTimeout(() => title.focus(), 0);
+}
+
+function updateSaveButtonLabel(isEditing) {
+  const saveBtn = $("#save");
+  if (!saveBtn) return;
+  saveBtn.textContent = isEditing ? "Update" : "Create";
 }
 
 function isVariablesModalOpen() {
@@ -261,7 +306,7 @@ function getSortedSnippets(applySearch) {
 
   const filtered = (applySearch && state.q)
     ? base.filter(s => {
-        const hay = [s.title||"", (s.tags||[]).join(","), s.content||""].join(" ").toLowerCase();
+        const hay = [s.title||"", s.content||""].join(" ").toLowerCase();
         return hay.includes(state.q);
       })
     : base;
@@ -274,6 +319,7 @@ function getSortedSnippets(applySearch) {
 function renderAll() {
   renderLists();
   renderVariables();
+  renderBuiltinVars();
   updatePreviewForEditor();
 }
 
@@ -284,6 +330,7 @@ function renderLists() {
 }
 
 function renderListTo(container, items) {
+  if (!container) return;
   container.innerHTML = "";
 
   if (items.length === 0) {
@@ -311,8 +358,6 @@ function renderListTo(container, items) {
       fillForm(s);
       highlightActive(s.id);
       updatePreviewForEditor();
-      openEditorModal();
-      focusTitleInput();
     });
 
     el.addEventListener("dblclick", () => insertSnippetById(s.id));
@@ -357,12 +402,6 @@ function renderListTo(container, items) {
     const top = document.createElement("div");
     top.className = "itemTop";
 
-    const handle = document.createElement("div");
-    handle.className = "dragHandle";
-    handle.textContent = "⋮⋮";
-    handle.title = dragEnabled ? "drag to reorder" : "dragging is disabled while searching";
-    handle.addEventListener("click", (e) => e.stopPropagation());
-
     const pin = document.createElement("div");
     pin.className = "pinIcon";
     pin.title = s.pinned ? "Unpin" : "Pin";
@@ -382,25 +421,78 @@ function renderListTo(container, items) {
     title.className = "itemTitle";
     title.textContent = s.title || "(no title)";
 
-    const badge = document.createElement("div");
-    badge.className = "badge";
-    badge.textContent = `${s.usageCount || 0} times`;
+    const createdAt = document.createElement("div");
+    createdAt.className = "itemCreatedAt";
+    createdAt.textContent = formatDateTime(s.createdAt);
 
-    top.appendChild(handle);
+    const actions = document.createElement("div");
+    actions.className = "itemActions";
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "itemActionBtn";
+    editBtn.title = "Edit";
+    editBtn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20h9"></path>
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+      </svg>
+    `;
+    editBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      state.editingId = s.id;
+      fillForm(s);
+      highlightActive(s.id);
+      updatePreviewForEditor();
+      openEditorModal();
+      focusTitleInput();
+    });
+
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "itemActionBtn";
+    copyBtn.title = "Copy";
+    copyBtn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+        <path d="M4 16c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2"></path>
+      </svg>
+    `;
+    copyBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await copySnippetContent(s, copyBtn);
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "itemActionBtn danger";
+    deleteBtn.title = "Delete";
+    deleteBtn.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18"></path>
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+        <line x1="10" x2="10" y1="11" y2="17"></line>
+        <line x1="14" x2="14" y1="11" y2="17"></line>
+      </svg>
+    `;
+    deleteBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      state.editingId = s.id;
+      await onDelete();
+    });
+
+    actions.appendChild(editBtn);
+    actions.appendChild(copyBtn);
+    actions.appendChild(deleteBtn);
+
     top.appendChild(pin);
     top.appendChild(title);
-    top.appendChild(badge);
-
-    const meta = document.createElement("div");
-    meta.className = "itemMeta";
-    meta.textContent = (s.tags && s.tags.length) ? `#${s.tags.join(" #")}` : "no tags";
+    top.appendChild(createdAt);
+    top.appendChild(actions);
 
     const preview = document.createElement("div");
     preview.className = "itemPreview";
     preview.textContent = makePreviewText(s.content || "");
 
     el.appendChild(top);
-    el.appendChild(meta);
     el.appendChild(preview);
 
     container.appendChild(el);
@@ -430,22 +522,22 @@ function highlightActive(id) {
 
 function fillForm(s) {
   $("#title").value = s.title || "";
-  $("#tags").value = (s.tags || []).join(", ");
   $("#content").value = s.content || "";
-  $("#enabled").checked = s.enabled !== false;
-  $("#delete").disabled = !s.id;
+  const deleteBtnEl = $("#delete");
+  if (deleteBtnEl) deleteBtnEl.disabled = !s.id;
+  updateSaveButtonLabel(!!s.id);
 }
 
 function readForm() {
   const title = $("#title").value.trim();
-  const tags = $("#tags").value.split(",").map(x => x.trim()).filter(Boolean);
   const content = $("#content").value;
   const pinned = getEditingSnippet()?.pinned ?? false;
+  const tags = getEditingSnippet()?.tags ?? [];
   return {
     title,
     tags,
     content,
-    enabled: $("#enabled").checked,
+    enabled: getEditingSnippet()?.enabled ?? true,
     pinned
   };
 }
@@ -490,6 +582,7 @@ async function onSave() {
   const cur = getEditingSnippet();
   if (cur) fillForm(cur);
   updatePreviewForEditor();
+  closeEditorModal();
 }
 
 async function onDelete() {
@@ -526,7 +619,7 @@ async function togglePin(id) {
     updatedAt: Date.now()
   };
 
-  if (state.editingId === id) $("#pinned").checked = nextPinned;
+  if (state.editingId === id) updatePreviewForEditor();
 
   normalizeOrdersInPlace();
   await persistSnippets();
@@ -674,6 +767,55 @@ function updatePreviewForEditor() {
   const builtins = getBuiltinsSync(state.pageContext);
   const values = { ...builtins, ...state.variables };
   $("#preview").textContent = applyTemplate(content, values, "placeholder");
+
+  const hint = document.querySelector("#editorModal .help");
+  if (hint) {
+    hint.innerHTML = `
+      <div class="helpTitle">미리보기(결과)</div>
+      <pre id="preview" class="previewBox"></pre>
+      <div class="helpTitle">변수</div>
+      ${renderEditorVarsSummary(builtins, state.variables)}
+    `;
+    const preview = $("#preview");
+    if (preview) preview.textContent = applyTemplate(content, values, "placeholder");
+  }
+}
+
+function renderBuiltinVars() {
+  const block = $("#builtinVarsBlock");
+  const list = $("#builtinVarsList");
+  if (!block || !list) return;
+
+  const builtins = getBuiltinsSync(state.pageContext);
+  const entries = Object.entries(builtins)
+    .filter(([, value]) => value !== "" && value !== null && value !== undefined);
+
+  if (entries.length === 0) {
+    block.style.display = "none";
+    list.innerHTML = "";
+    return;
+  }
+
+  block.style.display = "block";
+  list.innerHTML = entries
+    .map(([key]) => `<code>{{${key}}}</code>`)
+    .join(" <br/> ");
+}
+
+function renderEditorVarsSummary(builtins, variables) {
+  const builtinKeys = Object.entries(builtins || {})
+    .filter(([, value]) => value !== "" && value !== null && value !== undefined)
+    .map(([key]) => `{{${key}}}`);
+  const customKeys = Object.keys(variables || {}).map(key => `{{${key}}}`);
+
+  const builtinLine = builtinKeys.length
+    ? `내장: ${builtinKeys.map(k => `<code>${k}</code>`).join(" ")}`
+    : "";
+  const customLine = customKeys.length
+    ? `사용자: ${customKeys.map(k => `<code>${k}</code>`).join(" ")}`
+    : "";
+  const lines = [builtinLine, customLine].filter(Boolean);
+  return lines.length ? lines.join("<br/>") : "표시할 변수 없음";
 }
 
 function isValidVarKey(key) {
