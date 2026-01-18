@@ -39,7 +39,7 @@ Chrome 확장 프로그램으로, 사이드 패널에서 탭을 효율적으로 
 1. Chrome 브라우저에서 `chrome://extensions/` 접속
 2. 우측 상단의 "개발자 모드" 활성화
 3. "압축해제된 확장 프로그램을 로드합니다" 클릭
-4. `tabs-manager` 폴더 선택
+4. `tabs-sort-manager` 폴더 선택
 
 ## 사용 방법
 
@@ -68,7 +68,7 @@ Chrome 확장 프로그램으로, 사이드 패널에서 탭을 효율적으로 
 ## 파일 구조
 
 ```
-tabs-manager/
+tabs-sort-manager/
 ├── manifest.json      # 확장 프로그램 설정
 ├── sidepanel.html     # 사이드 패널 HTML
 ├── sidepanel.css      # 스타일시트
