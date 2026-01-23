@@ -1,7 +1,7 @@
 const storage = chrome.storage.local;
 const API_ROOT = "https://jira.foodtechkorea.com/rest";
 const API_VERSION = "2";
-const GOOGLE_CLIENT_ID = "1013698314494-ebkt0s9ht63snhhcpgevifj9s9dpmr4m.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID = "114426039511-29s70ph8lbdkr87g4urdqtmt7gdk40qe.apps.googleusercontent.com";
 const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_KEY = "googleAuth";
@@ -743,7 +743,13 @@ async function handleLoadMeetings() {
     );
 
     if (!response.ok) {
-      setCalendarStatus("캘린더 조회에 실패했습니다.", "error");
+      const errorPayload = await response.json().catch(() => ({}));
+      const detail = errorPayload.error?.message || errorPayload.error?.errors?.[0]?.message;
+      const statusLine = response.status ? `(${response.status})` : "";
+      setCalendarStatus(
+        detail ? `캘린더 조회에 실패했습니다 ${statusLine}: ${detail}` : `캘린더 조회에 실패했습니다 ${statusLine}`,
+        "error"
+      );
       return;
     }
 

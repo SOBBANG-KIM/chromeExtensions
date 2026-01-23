@@ -1,0 +1,19 @@
+{
+  "name": "@mac-bug-screenshot/native-host",
+  "version": "1.0.12",
+  "description": "Native messaging host for Mac Bug Screenshot.",
+  "bin": {
+    "mac-bug-screenshot-install": "bin/install.js"
+  },
+  "license": "MIT",
+  "main": "host.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mac",
+    "screenshot",
+    "bug"
+  ],
+  "author": "sobbang"
+}

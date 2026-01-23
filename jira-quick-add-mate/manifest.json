@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Mate Jira Quick Add",
+  "version": "0.1.0",
+  "description": "Create Jira issues using your existing Jira session.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "identity"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "https://www.googleapis.com/*"
+  ],
+  "oauth2": {
+    "client_id": "114426039511-29s70ph8lbdkr87g4urdqtmt7gdk40qe.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/calendar.readonly"
+    ]
+  },
+  "action": {
+    "default_title": "Jira Quick Add",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/favicon_mate_16.png",
+      "48": "images/favicon_mate_48.png",
+      "128": "images/favicon_mate_128.png"
+    }
+  },
+  "icons": {
+    "16": "images/favicon_mate_16.png",
+    "48": "images/favicon_mate_48.png",
+    "128": "images/favicon_mate_128.png"
+  }
+}
