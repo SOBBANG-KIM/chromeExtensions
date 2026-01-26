@@ -1,4 +1,4 @@
-Mac Bug Screenshot은 맥에서 전체 화면과 영역 캡처를 빠르게 수행할 수 있는 크롬 확장프로그램입니다. 네이티브 호스트를 설치하면 지정 경로로 바로 저장할 수 있어 버그 리포트/QA 캡처에 유용합니다.
+Mac Screenshot Bug Resolver는 macOS에서 전체 화면과 영역 캡처를 빠르게 수행할 수 있는 크롬 확장프로그램입니다. 네이티브 호스트를 설치하면 지정한 경로로 바로 저장할 수 있어 버그 리포트/QA 캡처에 유용합니다.
 
 ## 📸 빠른 캡처
 팝업에서 **전체 화면 캡처** 또는 **영역 캡처** 버튼을 누르면 바로 캡처를 진행합니다. 반복되는 캡처 작업을 간단하게 처리하세요.
@@ -35,7 +35,7 @@ mac-bug-screenshot-install
 ---
 
 ## English
-Mac Bug Screenshot is a Chrome extension for fast full-screen and region captures on macOS. Install the native host to save screenshots directly to a chosen folder, which is ideal for bug reports and QA workflows.
+Mac Screenshot Bug Resolver is a Chrome extension for fast full-screen and region captures on macOS. Install the native host to save screenshots directly to a chosen folder, which is ideal for bug reports and QA workflows.
 
 ## 📸 Fast Capture
 Click **Full Screen Capture** or **Region Capture** in the popup to capture immediately and streamline repetitive capture tasks.

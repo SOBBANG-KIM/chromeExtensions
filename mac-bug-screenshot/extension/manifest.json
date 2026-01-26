@@ -1,16 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Mac Bug Screenshot",
+  "name": "Mac Screenshot Bug Resolver",
   "version": "1.0.0",
-  "description": "Native-mode desktop screenshot tool.",
+  "description": "Mac os screenshot tool.",
   "action": {
-    "default_title": "Mac Bug Screenshot",
+    "default_title": "Mac Screenshot Bug Resolver",
     "default_popup": "popup.html"
   },
   "permissions": [
     "storage",
-    "nativeMessaging",
-    "tabs"
+    "nativeMessaging"
   ],
   "icons": {
     "16": "images/favicon_screenshot_16.png",

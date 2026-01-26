@@ -1,24 +1,24 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mac Bug Screenshot</title>
+    <title>Mac Screenshot Bug Resolver</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main class="container">
-      <h1 class="title">Mac Bug Screenshot</h1>
-      <p class="hint">캡처 중에는 창이 잠시 숨겨집니다.</p>
+      <h1 class="title">Mac Screenshot Bug Resolver</h1>
+      <p class="hint">The window will be hidden briefly during capture.</p>
       <p id="status" class="status" role="status"></p>
       <div class="actions">
-        <button id="closeBtn" type="button">닫기</button>
+        <button id="closeBtn" type="button">Close</button>
       </div>
       <section id="nativeGuide" class="guide is-hidden" aria-live="polite">
-        <strong>네이티브 설치가 필요합니다.</strong>
-        <p>터미널에서 아래 명령을 실행하세요.</p>
+        <strong>Installation required.</strong>
+        <p>Run the following commands in Terminal.</p>
         <code>npm install -g @mac-bug-screenshot/native-host</code>
-        <code>mac-bug-screenshot-install &lt;확장_프로그램_ID&gt;</code>
+        <code>mac-bug-screenshot-install</code>
       </section>
     </main>
     <script src="window.js"></script>

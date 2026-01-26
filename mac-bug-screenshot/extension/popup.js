@@ -18,7 +18,7 @@ const LANGUAGE_KEY = "uiLanguage";
 
 const translations = {
   ko: {
-    title: "Mac Bug Screenshot",
+    title: "Mac Screenshot Bug Resolver",
     hintInstall: "별도 설치가 필요합니다.",
     labelPrefix: "파일명 접두사",
     labelDir: "저장 경로",
@@ -43,7 +43,7 @@ const translations = {
     unknownError: "알 수 없는 오류"
   },
   en: {
-    title: "Mac Bug Screenshot",
+    title: "Mac Screenshot Bug Resolver",
     hintInstall: "Installation required.",
     labelPrefix: "Filename prefix",
     labelDir: "Save directory",

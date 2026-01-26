@@ -34,7 +34,7 @@ async function restoreWindow() {
 
 async function startCapture() {
   const mode = getMode();
-  setStatus(mode === "full" ? "전체 화면 캡처 준비 중..." : "영역 캡처 준비 중...");
+  setStatus(mode === "full" ? "Preparing full screen capture..." : "Preparing region capture...");
   const settings = await getSettings();
   const outputDir = settings.outputDir || "";
 
@@ -48,18 +48,18 @@ async function startCapture() {
       if (chrome.runtime.lastError) {
         await restoreWindow();
         nativeGuide.classList.remove("is-hidden");
-        setStatus(`오류: ${chrome.runtime.lastError.message}`, true);
+        setStatus(`Error: ${chrome.runtime.lastError.message}`, true);
         return;
       }
       if (!response || response.ok !== true) {
         await restoreWindow();
         nativeGuide.classList.remove("is-hidden");
-        setStatus(`오류: ${response?.error || "알 수 없는 오류"}`, true);
+        setStatus(`Error: ${response?.error || "Unknown error"}`, true);
         return;
       }
       await restoreWindow();
       nativeGuide.classList.add("is-hidden");
-      setStatus("캡처 완료");
+      setStatus("Capture complete");
     }
   );
 }
