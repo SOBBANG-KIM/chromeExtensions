@@ -8,39 +8,56 @@
   </head>
   <body>
     <main class="container">
-      <h1 class="title">Mac Bug Screenshot</h1>
-      <p class="hint">네이티브 모드는 별도 설치가 필요합니다.</p>
+      <div class="header">
+        <h1 class="title" data-i18n="title">Mac Bug Screenshot</h1>
+        <button id="langToggle" class="lang-toggle" type="button">English</button>
+      </div>
+      <p class="hint" data-i18n="hintInstall">별도 설치가 필요합니다.</p>
       <label class="field">
-        <span>파일명 접두사</span>
+        <span data-i18n="labelPrefix">파일명 접두사</span>
         <input id="prefixInput" type="text" placeholder="screenshot" />
       </label>
       <label class="field" id="nativeDirField">
-        <span>저장 경로</span>
+        <span data-i18n="labelDir">저장 경로</span>
         <input id="dirInput" type="text" placeholder="~/Desktop/mac-bug-screenshot" />
       </label>
-      <p class="hint" id="nativeHint">네이티브 모드에서만 적용됩니다.</p>
-      <p class="hint" id="nativeRegionHint">영역 드래그 선택은 네이티브 모드에서만 가능합니다.</p>
+      <p class="hint" id="nativeHint" data-i18n="hintSettings">설정 저장 후 적용됩니다.</p>
+      <p class="hint" id="nativeRegionHint" data-i18n="hintRegion">
+        영역 드래그 선택을 지원합니다.
+      </p>
       <div class="actions native-actions" id="nativeActions">
-        <button id="saveBtn" type="button">설정 저장</button>
-        <button id="nativeRegionBtn" type="button">영역 캡처</button>
-        <button id="nativeFullWindowBtn" type="button">전체 화면 캡처 (창 숨김/복귀)</button>
-        <button id="nativeFullResultBtn" type="button">전체 화면 캡처 (결과 탭)</button>
+        <button id="saveBtn" type="button" data-i18n="btnSave">설정 저장</button>
+        <button id="nativeRegionBtn" type="button" data-i18n="btnRegion">
+          영역 캡처
+        </button>
+        <button
+          id="nativeFullWindowBtn"
+          type="button"
+          data-i18n="btnFullWindow"
+        >
+          전체 화면 캡처
+        </button>
       </div>
       <p id="status" class="status" role="status"></p>
       <section id="nativeGuide" class="guide is-hidden" aria-live="polite">
-        <strong>네이티브 설치가 필요합니다.</strong>
-        <p>터미널에서 아래 명령을 실행하세요.</p>
+        <strong data-i18n="guideTitle">설치가 필요합니다.</strong>
+        <p data-i18n="guideDesc">터미널에서 아래 명령을 실행하세요.</p>
         <code>npm install -g @mac-bug-screenshot/native-host</code>
         <code>mac-bug-screenshot-install &lt;확장_프로그램_ID&gt;</code>
         <div class="guide-actions">
-          <button id="copyInstallBtn" type="button">설치 명령 복사</button>
-          <button id="copyRegisterBtn" type="button">등록 명령 복사</button>
+          <button id="copyInstallBtn" type="button" data-i18n="btnCopyInstall">
+            설치 명령 복사
+          </button>
+          <button id="copyRegisterBtn" type="button" data-i18n="btnCopyRegister">
+            등록 명령 복사
+          </button>
         </div>
         <a
           class="guide-link"
           href="https://www.npmjs.com/package/@mac-bug-screenshot/native-host"
           target="_blank"
           rel="noreferrer"
+          data-i18n="linkNpm"
         >
           npm 페이지 열기
         </a>

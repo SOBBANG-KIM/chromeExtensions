@@ -13,8 +13,8 @@
     "tabs"
   ],
   "icons": {
-    "16": "../images/favicon_screenshot_16.png",
-    "48": "../images/favicon_screenshot_48.png",
-    "128": "../images/favicon_screenshot_128.png"
+    "16": "images/favicon_screenshot_16.png",
+    "48": "images/favicon_screenshot_48.png",
+    "128": "images/favicon_screenshot_128.png"
   }
 }

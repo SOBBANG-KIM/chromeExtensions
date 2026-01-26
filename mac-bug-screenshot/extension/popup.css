@@ -11,10 +11,28 @@ body {
   box-sizing: border-box;
 }
 
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 .title {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
+}
+
+.lang-toggle {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 11px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
 }
 
 .field {
@@ -124,10 +142,6 @@ button {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-}
-
-#saveBtn {
-  background: #e5e7eb;
 }
 
 .status {

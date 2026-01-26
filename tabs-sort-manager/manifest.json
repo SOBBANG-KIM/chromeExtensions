@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Tabs Sort Manager",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Side panel vertical tabs with domain sort, drag reorder, groups, and search.",
     "permissions": ["sidePanel", "tabs", "tabGroups", "storage"],
     "background": { "service_worker": "sw.js", "type": "module" },

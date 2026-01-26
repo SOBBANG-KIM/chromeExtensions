@@ -11,7 +11,7 @@ npm install -g @mac-bug-screenshot/native-host
 ## 등록
 
 ```bash
-mac-bug-screenshot-install <확장_프로그램_ID>
+mac-bug-screenshot-install
 ```
 
 ## 동작
@@ -29,6 +29,6 @@ mac-bug-screenshot-install <확장_프로그램_ID>
 - `Native host has exited` 오류가 뜨면 최신 버전으로 업데이트 후 재등록하세요.
   ```bash
   npm install -g @mac-bug-screenshot/native-host@latest
-  mac-bug-screenshot-install <확장_프로그램_ID>
+  mac-bug-screenshot-install
   ```
 - nvm 사용 시에도 `npm root -g` 기준 경로로 자동 설정됩니다.

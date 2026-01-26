@@ -19,21 +19,9 @@ const TARGET_DIR = path.join(
 );
 const TARGET_PATH = path.join(TARGET_DIR, `${HOST_NAME}.json`);
 
-function printUsage() {
-  console.log("사용법: mac-bug-screenshot-install <확장_프로그램_ID>");
-}
-
 function main() {
-  const extensionId = process.argv[2];
-  if (!extensionId) {
-    printUsage();
-    process.exit(1);
-  }
-
   const template = fs.readFileSync(TEMPLATE_PATH, "utf8");
-  const manifest = template
-    .replace(/__HOST_PATH__/g, WRAPPER_PATH)
-    .replace(/__EXTENSION_ID__/g, extensionId);
+  const manifest = template.replace(/__HOST_PATH__/g, WRAPPER_PATH);
 
   if (!fs.existsSync(HOST_PATH)) {
     console.error("host.js를 찾을 수 없습니다:", HOST_PATH);
