@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Make QR Code</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="header-row">
+          <div>
+            <h1 data-i18n="title">URL QR 코드 생성기</h1>
+            <p class="subtext" data-i18n="subtitle">
+              URL과 옵션을 입력하면 QR 코드 이미지를 만들어요.
+            </p>
+          </div>
+          <button
+            id="langToggle"
+            class="lang-toggle"
+            type="button"
+            aria-pressed="false"
+          >
+            한국어
+          </button>
+        </div>
+      </header>
+
+      <section class="card">
+        <label>
+          <span data-i18n="labelUrl">URL</span>
+          <input
+            id="urlInput"
+            type="url"
+            placeholder="https://example.com"
+            autocomplete="off"
+            required
+          />
+        </label>
+        <div class="row">
+          <label class="grow">
+            <span data-i18n="labelSize">이미지 크기 (px)</span>
+            <input
+              id="sizeInput"
+              type="number"
+              min="120"
+              max="1024"
+              step="10"
+              value="240"
+            />
+          </label>
+          <label class="grow">
+            <span data-i18n="labelFileName">다운로드 파일명</span>
+            <input
+              id="fileNameInput"
+              type="text"
+              placeholder="qr-code"
+              autocomplete="off"
+            />
+          </label>
+        </div>
+        <label>
+          <span data-i18n="labelCaption">QR 코드 아래 문구 (선택)</span>
+          <input
+            id="captionInput"
+            type="text"
+            placeholder="예) 이벤트 페이지 바로가기"
+            data-i18n-placeholder="placeholderCaption"
+            autocomplete="off"
+          />
+        </label>
+        <section class="actions">
+          <button id="generate" class="primary" type="button" data-i18n="buttonGenerate">
+            QR 생성
+          </button>
+          <button id="download" class="secondary" type="button" disabled>
+            <span data-i18n="buttonDownload">다운로드</span>
+          </button>
+        </section>
+        <p id="status" class="status" role="status"></p>
+      </section>
+
+      <section class="preview">
+        <canvas id="qrCanvas" width="240" height="240"></canvas>
+      </section>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

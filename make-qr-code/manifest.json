@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Make QR Code",
+  "version": "1.0.0",
+  "description": "URL을 입력하면 QR 코드 이미지를 만들고 다운로드합니다.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Make QR Code"
+  },
+  "icons": {
+    "16": "images/favicon_16.png",
+    "48": "images/favicon_48.png",
+    "128": "images/favicon_128.png"
+  },
+  "host_permissions": ["https://api.qrserver.com/*"]
+}
