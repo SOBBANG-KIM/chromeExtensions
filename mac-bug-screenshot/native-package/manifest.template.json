@@ -3,5 +3,5 @@
   "description": "Native host for mac-bug-screenshot.",
   "path": "__HOST_PATH__",
   "type": "stdio",
-  "allowed_origins": ["chrome-extension://jmdcdaafmahlbhncekhfhlncfgkjoogb/"]
+  "allowed_origins": ["chrome-extension://aaboljmpdjkhigeljaflihcniechinjg/"]
 }

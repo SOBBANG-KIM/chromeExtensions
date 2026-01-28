@@ -1,6 +1,6 @@
 {
   "name": "@mac-bug-screenshot/native-host",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Native messaging host for Mac Bug Screenshot.",
   "bin": {
     "mac-bug-screenshot-install": "bin/install.js"
