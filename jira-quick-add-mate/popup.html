@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Jira Quick Add</title>
+    <title>Jira Worklog Quick Add</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <div class="container">
       <header>
-        <h1>Jira Quick Add</h1>
+        <h1>Jira Worklog Quick Add</h1>
         <p id="authStatus" class="auth-status"></p>
       </header>
 
@@ -33,6 +33,16 @@
           aria-controls="panel-worklog"
         >
           add worklog
+        </button>
+        <button
+          id="tab-my-issues"
+          class="tab"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-my-issues"
+        >
+          add my issues
         </button>
       </nav>
 
@@ -91,13 +101,15 @@
       >
         <section class="card">
           <h2>Worklog 입력</h2>
-          <label>
-            이슈 키
-            <input id="worklogIssueKey" type="text" placeholder="FTPM-1234" />
-          </label>
-          <button id="useLastIssue" class="secondary" type="button">
-            마지막 이슈 키 사용
-          </button>
+          <div class="row" style="gap: 8px;justify-content: center;align-items: center;">
+            <label class="grow">
+              이슈 키
+              <input id="worklogIssueKey" type="text" placeholder="FTPM-1234" />
+            </label>
+            <button id="useLastIssue" class="secondary" type="button" style="margin-top: 8px;">
+              마지막 이슈 키 사용
+            </button>
+          </div>
           <div class="divider"></div>
           <h3>구글 캘린더</h3>
           <div class="row">
@@ -114,13 +126,14 @@
               />
             </label>
           </div>
-          <div class="row">
+          <div class="row" style="align-items: center; flex-wrap: wrap; gap: 8px;">
             <button id="googleLogin" class="secondary" type="button">
               Google 로그인
             </button>
             <button id="loadMeetings" class="secondary" type="button">
               회의 불러오기
             </button>
+            <span id="loadedMeetingsCount" class="calendar-status" aria-live="polite"></span>
           </div>
           <p id="calendarStatus" class="calendar-status"></p>
           <div class="divider"></div>
@@ -130,7 +143,7 @@
               <input id="worklogStarted" type="datetime-local" />
             </label>
             <label class="grow wide">
-              소요 시간
+              작업 시간
               <input id="worklogTimeSpent" type="text" placeholder="16h" />
             </label>
           </div>
@@ -146,11 +159,43 @@
 
         <section class="actions">
           <button id="addWorklog" class="primary" type="button">
-            Worklog 저장
+            한번에 저장
+          </button>
+          <button id="addWorklogsFromCalendar" class="primary" type="button" disabled>
+            회의별로 저장
           </button>
           <button id="clearWorklog" class="secondary" type="button">
             입력 초기화
           </button>
+        </section>
+      </section>
+
+      <section
+        id="panel-my-issues"
+        class="tab-panel hidden"
+        role="tabpanel"
+        aria-labelledby="tab-my-issues"
+      >
+        <section class="card">
+          <h2>내 이슈 목록</h2>
+          <div class="row issue-filter-row">
+            <div style="width: 60px; margin-bottom: 8px;">상태: </div>
+            <input id="myIssuesStatusFilter" type="text" placeholder="진행 중" value="진행 중" style="margin-top: 0;"/>
+            <div class="actions issue-filter-actions">
+              <button id="loadMyInProgressIssues" class="primary" type="button">
+                목록 불러오기
+              </button>
+            </div>
+          </div>
+          <p id="myIssuesStatus" class="calendar-status"></p>
+          <div id="myIssuesPaging" class="issue-paging hidden">
+            <span id="myIssuesPageInfo" class="issue-page-info"></span>
+            <div class="issue-paging-buttons">
+              <button id="myIssuesPrev" class="secondary" type="button">이전</button>
+              <button id="myIssuesNext" class="secondary" type="button">다음</button>
+            </div>
+          </div>
+          <ul id="myIssuesList" class="issue-list" aria-live="polite"></ul>
         </section>
       </section>
 

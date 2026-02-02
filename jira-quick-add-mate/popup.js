@@ -2,6 +2,7 @@ const storage = chrome.storage.local;
 const API_ROOT = "https://jira.foodtechkorea.com/rest";
 const API_VERSION = "2";
 const GOOGLE_CLIENT_ID = "114426039511-29s70ph8lbdkr87g4urdqtmt7gdk40qe.apps.googleusercontent.com";
+// const GOOGLE_CLIENT_ID = "1013698314494-ebkt0s9ht63snhhcpgevifj9s9dpmr4m.apps.googleusercontent.com"; // DEV
 const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_KEY = "googleAuth";
@@ -30,9 +31,21 @@ const elements = {
   loadMeetings: document.getElementById("loadMeetings"),
   calendarStatus: document.getElementById("calendarStatus"),
   addWorklog: document.getElementById("addWorklog"),
+  addWorklogsFromCalendar: document.getElementById("addWorklogsFromCalendar"),
+  loadedMeetingsCount: document.getElementById("loadedMeetingsCount"),
   clearWorklog: document.getElementById("clearWorklog"),
   authStatus: document.getElementById("authStatus"),
   status: document.getElementById("status"),
+  tabMyIssues: document.getElementById("tab-my-issues"),
+  panelMyIssues: document.getElementById("panel-my-issues"),
+  loadMyInProgressIssues: document.getElementById("loadMyInProgressIssues"),
+  myIssuesStatus: document.getElementById("myIssuesStatus"),
+  myIssuesList: document.getElementById("myIssuesList"),
+  myIssuesStatusFilter: document.getElementById("myIssuesStatusFilter"),
+  myIssuesPaging: document.getElementById("myIssuesPaging"),
+  myIssuesPageInfo: document.getElementById("myIssuesPageInfo"),
+  myIssuesPrev: document.getElementById("myIssuesPrev"),
+  myIssuesNext: document.getElementById("myIssuesNext"),
 };
 
 const SETTINGS_FIELDS = ["projectKey", "issueType"];
@@ -48,6 +61,11 @@ const WORKLOG_FIELDS = [
 
 let lastIssueKey = "";
 let currentUserId = "";
+const MY_ISSUES_PAGE_SIZE = 10;
+/** 캘린더에서 불러온 회의 목록 (회의별 Worklog 저장용). 각 항목: { start: Date, durationMin: number, title: string } */
+let loadedCalendarMeetings = [];
+let myIssuesTotal = 0;
+let myIssuesCurrentPage = 0;
 
 function setStatus(message, type = "", linkUrl = "") {
   elements.status.className = `status ${type}`.trim();
@@ -76,6 +94,16 @@ function setAuthStatus(message, type = "") {
 function setCalendarStatus(message, type = "") {
   elements.calendarStatus.className = `calendar-status ${type}`.trim();
   elements.calendarStatus.textContent = message;
+}
+
+function updateLoadedMeetingsUI() {
+  const count = loadedCalendarMeetings.length;
+  if (elements.loadedMeetingsCount) {
+    elements.loadedMeetingsCount.textContent = count ? `${count}개 회의 불러옴` : "";
+  }
+  if (elements.addWorklogsFromCalendar) {
+    elements.addWorklogsFromCalendar.disabled = count === 0;
+  }
 }
 
 function normalizeErrorMessage(error) {
@@ -124,6 +152,10 @@ async function saveGoogleToken(accessToken, expiresIn) {
 function setGoogleUiEnabled(enabled) {
   elements.googleLogin.disabled = !enabled;
   elements.loadMeetings.disabled = !enabled;
+}
+
+function setGoogleLoginButtonVisible(visible) {
+  elements.googleLogin.classList.toggle("hidden", !visible);
 }
 
 function formatDuration(minutes) {
@@ -244,14 +276,17 @@ async function checkGoogleAuthStatus() {
   if (!ensureGoogleClientConfigured()) {
     setCalendarStatus("Google OAuth 클라이언트 ID 설정 필요", "error");
     setGoogleUiEnabled(false);
+    setGoogleLoginButtonVisible(true);
     return;
   }
   setGoogleUiEnabled(true);
   try {
     await getGoogleToken(false);
     setCalendarStatus("Google 로그인 상태: 로그인됨", "success");
+    setGoogleLoginButtonVisible(false);
   } catch (error) {
     setCalendarStatus("Google 로그인 상태: 미로그인", "error");
+    setGoogleLoginButtonVisible(true);
   }
 }
 
@@ -311,6 +346,16 @@ function formatLocalInputValue(date) {
   const hours = pad(date.getHours());
   const minutes = pad(date.getMinutes());
   return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function datetimeLocalToJiraStarted(value) {
+  if (!value) {
+    return formatJiraDateTime(new Date());
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? formatJiraDateTime(new Date())
+    : formatJiraDateTime(date);
 }
 
 function syncWorklogStartedDate(dateText, rangeText = "") {
@@ -452,13 +497,20 @@ function validateWorklog(values) {
 
 function setActiveTab(tabName) {
   const isIssue = tabName === "issue";
+  const isWorklog = tabName === "worklog";
+  const isMyIssues = tabName === "my-issues";
+
   elements.tabIssue.classList.toggle("active", isIssue);
   elements.tabIssue.setAttribute("aria-selected", String(isIssue));
   elements.panelIssue.classList.toggle("hidden", !isIssue);
 
-  elements.tabWorklog.classList.toggle("active", !isIssue);
-  elements.tabWorklog.setAttribute("aria-selected", String(!isIssue));
-  elements.panelWorklog.classList.toggle("hidden", isIssue);
+  elements.tabWorklog.classList.toggle("active", isWorklog);
+  elements.tabWorklog.setAttribute("aria-selected", String(isWorklog));
+  elements.panelWorklog.classList.toggle("hidden", !isWorklog);
+
+  elements.tabMyIssues.classList.toggle("active", isMyIssues);
+  elements.tabMyIssues.setAttribute("aria-selected", String(isMyIssues));
+  elements.panelMyIssues.classList.toggle("hidden", !isMyIssues);
 }
 
 function updateParentIssueVisibility() {
@@ -511,6 +563,7 @@ async function loadFromStorage() {
 
   lastIssueKey = result.lastIssueKey || "";
   setActiveTab(result.activeTab || "issue");
+  updateLoadedMeetingsUI();
 }
 
 async function saveSettings() {
@@ -565,6 +618,8 @@ async function handleClearWorklog() {
   elements.worklogComment.value = "";
   elements.calendarDate.value = formatLocalInputValue(new Date()).split("T")[0];
   elements.calendarRange.value = "09:30 ~ 18:30";
+  loadedCalendarMeetings = [];
+  updateLoadedMeetingsUI();
   await saveWorklogDraft();
   setStatus("입력이 초기화되었습니다.", "success");
 }
@@ -695,6 +750,45 @@ async function handleAddWorklog() {
   }
 }
 
+async function handleAddWorklogsFromCalendar() {
+  const issueKey = elements.worklogIssueKey.value.trim();
+  if (!issueKey) {
+    setStatus("이슈 키를 입력해주세요.", "error");
+    return;
+  }
+  if (!loadedCalendarMeetings.length) {
+    setStatus("캘린더에서 회의를 먼저 불러와주세요.", "error");
+    return;
+  }
+
+  setStatus("회의별 Worklog 저장 중...", "loading");
+  let successCount = 0;
+  let lastError = null;
+  for (const meeting of loadedCalendarMeetings) {
+    try {
+      await postWorklog(issueKey, {
+        started: formatJiraDateTime(meeting.start),
+        timeSpent: formatDuration(meeting.durationMin),
+        comment: meeting.title,
+      });
+      successCount += 1;
+    } catch (err) {
+      lastError = err;
+      setStatus(`${successCount}개 저장 후 오류: ${normalizeErrorMessage(err)}`, "error");
+      return;
+    }
+  }
+
+  lastIssueKey = issueKey;
+  await storage.set({ lastIssueKey });
+  loadedCalendarMeetings = [];
+  updateLoadedMeetingsUI();
+  elements.worklogTimeSpent.value = "";
+  elements.worklogComment.value = "";
+  await saveWorklogDraft();
+  setStatus(`${successCount}개 Worklog 저장 완료`, "success");
+}
+
 async function handleGoogleLogin() {
   if (!ensureGoogleClientConfigured()) {
     setCalendarStatus("Google OAuth 클라이언트 ID 설정 필요", "error");
@@ -705,6 +799,7 @@ async function handleGoogleLogin() {
   try {
     await getGoogleToken(true);
     setCalendarStatus("Google 로그인 상태: 로그인됨", "success");
+    setGoogleLoginButtonVisible(false);
   } catch (error) {
     const message = normalizeErrorMessage(error);
     setCalendarStatus(
@@ -712,6 +807,270 @@ async function handleGoogleLogin() {
       "error"
     );
   }
+}
+
+const JIRA_BROWSE_BASE = "https://jira.foodtechkorea.com/browse";
+
+function setMyIssuesStatus(message, type = "") {
+  elements.myIssuesStatus.className = `calendar-status ${type}`.trim();
+  elements.myIssuesStatus.textContent = message;
+}
+
+async function postWorklog(issueKey, { started, timeSpent, comment }) {
+  const payload = buildWorklogPayload({ started, timeSpent, comment });
+  const url = `${API_ROOT}/api/${API_VERSION}/issue/${encodeURIComponent(issueKey)}/worklog`;
+  const response = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const msg = data.errorMessages?.join(", ") || data.errors
+      ? Object.values(data.errors).join(", ")
+      : `저장 실패 (${response.status})`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function getMyIssuesStatusFilter() {
+  const value = elements.myIssuesStatusFilter?.value?.trim();
+  return value || "진행 중";
+}
+
+function escapeStatusForJql(status) {
+  return status.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+async function fetchMyInProgressIssues(startAt = 0) {
+  const statusText = getMyIssuesStatusFilter();
+  const escaped = escapeStatusForJql(statusText);
+  const jql = `assignee = currentUser() AND status = "${escaped}"`;
+  const params = new URLSearchParams({
+    jql,
+    fields: "summary,status",
+    maxResults: String(MY_ISSUES_PAGE_SIZE),
+    startAt: String(startAt),
+  });
+  const url = `${API_ROOT}/api/${API_VERSION}/search?${params.toString()}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const msg = data.errorMessages?.join(", ") || `조회 실패 (${response.status})`;
+    throw new Error(msg);
+  }
+
+  const data = await response.json();
+  return {
+    issues: data.issues || [],
+    total: data.total ?? 0,
+  };
+}
+
+function updateMyIssuesPagingUI() {
+  if (!elements.myIssuesPaging || !elements.myIssuesPageInfo) {
+    return;
+  }
+  if (myIssuesTotal <= MY_ISSUES_PAGE_SIZE) {
+    elements.myIssuesPaging.classList.add("hidden");
+    return;
+  }
+  elements.myIssuesPaging.classList.remove("hidden");
+  const from = myIssuesCurrentPage * MY_ISSUES_PAGE_SIZE + 1;
+  const to = Math.min((myIssuesCurrentPage + 1) * MY_ISSUES_PAGE_SIZE, myIssuesTotal);
+  const totalPages = Math.ceil(myIssuesTotal / MY_ISSUES_PAGE_SIZE);
+  elements.myIssuesPageInfo.textContent = `${from}-${to} / ${myIssuesTotal}건 (${myIssuesCurrentPage + 1} / ${totalPages}페이지)`;
+  if (elements.myIssuesPrev) {
+    elements.myIssuesPrev.disabled = myIssuesCurrentPage <= 0;
+  }
+  if (elements.myIssuesNext) {
+    elements.myIssuesNext.disabled = (myIssuesCurrentPage + 1) * MY_ISSUES_PAGE_SIZE >= myIssuesTotal;
+  }
+}
+
+function renderMyIssuesList(issues) {
+  elements.myIssuesList.innerHTML = "";
+
+  if (!issues.length) {
+    const li = document.createElement("li");
+    li.className = "issue-list-empty";
+    li.textContent = "해당 상태의 이슈가 없습니다.";
+    elements.myIssuesList.appendChild(li);
+    return;
+  }
+
+  for (const issue of issues) {
+    const key = issue.key || "";
+    const summary = issue.fields?.summary || "(제목 없음)";
+    const href = key ? `${JIRA_BROWSE_BASE}/${key}` : "";
+
+    const li = document.createElement("li");
+    li.className = "issue-list-item";
+    li.dataset.issueKey = key;
+
+    const head = document.createElement("div");
+    head.className = "issue-list-item-head";
+
+    const link = document.createElement("a");
+    link.href = href;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.className = "issue-list-item-link";
+    link.textContent = key ? `${key}: ${summary}` : summary;
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "secondary issue-worklog-toggle";
+    toggleBtn.textContent = "작업로그";
+
+    head.appendChild(link);
+    head.appendChild(toggleBtn);
+    li.appendChild(head);
+
+    const formWrap = document.createElement("div");
+    formWrap.className = "issue-worklog-form hidden";
+
+    const startedLabel = document.createElement("label");
+    startedLabel.textContent = "시작 시각";
+    const startedInput = document.createElement("input");
+    startedInput.type = "datetime-local";
+    startedInput.className = "issue-worklog-started";
+    startedInput.value = formatLocalInputValue(new Date());
+    startedLabel.appendChild(startedInput);
+
+    const timeSpentLabel = document.createElement("label");
+    timeSpentLabel.textContent = "소요 시간";
+    const timeSpentInput = document.createElement("input");
+    timeSpentInput.type = "text";
+    timeSpentInput.className = "issue-worklog-time";
+    timeSpentInput.placeholder = "1h 30m";
+    timeSpentLabel.appendChild(timeSpentInput);
+
+    const commentLabel = document.createElement("label");
+    commentLabel.textContent = "설명";
+    const commentInput = document.createElement("textarea");
+    commentInput.className = "issue-worklog-comment";
+    commentInput.rows = 2;
+    commentInput.placeholder = "작업 내용";
+    commentLabel.appendChild(commentInput);
+
+    const formActions = document.createElement("div");
+    formActions.className = "actions issue-worklog-actions";
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "primary";
+    saveBtn.textContent = "저장";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "secondary";
+    cancelBtn.textContent = "취소";
+    formActions.appendChild(saveBtn);
+    formActions.appendChild(cancelBtn);
+
+    const statusEl = document.createElement("p");
+    statusEl.className = "issue-list-item-status";
+
+    formWrap.appendChild(startedLabel);
+    formWrap.appendChild(timeSpentLabel);
+    formWrap.appendChild(commentLabel);
+    formWrap.appendChild(formActions);
+    formWrap.appendChild(statusEl);
+    li.appendChild(formWrap);
+
+    toggleBtn.addEventListener("click", () => {
+      const isHidden = formWrap.classList.toggle("hidden");
+      if (!isHidden) {
+        startedInput.value = formatLocalInputValue(new Date());
+        statusEl.textContent = "";
+        statusEl.className = "issue-list-item-status";
+      }
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      formWrap.classList.add("hidden");
+      statusEl.textContent = "";
+      statusEl.className = "issue-list-item-status";
+    });
+
+    saveBtn.addEventListener("click", async () => {
+      const timeSpent = timeSpentInput.value.trim();
+      if (!timeSpent) {
+        statusEl.textContent = "소요 시간을 입력하세요.";
+        statusEl.className = "issue-list-item-status error";
+        return;
+      }
+      statusEl.textContent = "저장 중...";
+      statusEl.className = "issue-list-item-status loading";
+      saveBtn.disabled = true;
+      try {
+        await postWorklog(key, {
+          started: datetimeLocalToJiraStarted(startedInput.value),
+          timeSpent,
+          comment: commentInput.value.trim(),
+        });
+        statusEl.textContent = "저장되었습니다.";
+        statusEl.className = "issue-list-item-status success";
+        timeSpentInput.value = "";
+        commentInput.value = "";
+        lastIssueKey = key;
+        await storage.set({ lastIssueKey: key });
+      } catch (err) {
+        statusEl.textContent = normalizeErrorMessage(err) || "저장에 실패했습니다.";
+        statusEl.className = "issue-list-item-status error";
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    elements.myIssuesList.appendChild(li);
+  }
+}
+
+async function loadMyIssuesPage(pageIndex) {
+  const startAt = pageIndex * MY_ISSUES_PAGE_SIZE;
+  setMyIssuesStatus("불러오는 중...", "loading");
+  elements.myIssuesList.innerHTML = "";
+  if (elements.myIssuesPaging) {
+    elements.myIssuesPaging.classList.add("hidden");
+  }
+
+  try {
+    const { issues, total } = await fetchMyInProgressIssues(startAt);
+    myIssuesTotal = total;
+    myIssuesCurrentPage = pageIndex;
+    renderMyIssuesList(issues);
+    updateMyIssuesPagingUI();
+    setMyIssuesStatus(`총 ${total}건`, "success");
+  } catch (error) {
+    const message = normalizeErrorMessage(error);
+    setMyIssuesStatus(message ? `조회 실패: ${message}` : "조회에 실패했습니다.", "error");
+    renderMyIssuesList([]);
+  }
+}
+
+async function handleLoadMyInProgressIssues() {
+  await loadMyIssuesPage(0);
+}
+
+function handleMyIssuesPrev() {
+  if (myIssuesCurrentPage <= 0) return;
+  loadMyIssuesPage(myIssuesCurrentPage - 1);
+}
+
+function handleMyIssuesNext() {
+  if ((myIssuesCurrentPage + 1) * MY_ISSUES_PAGE_SIZE >= myIssuesTotal) return;
+  loadMyIssuesPage(myIssuesCurrentPage + 1);
 }
 
 async function handleLoadMeetings() {
@@ -764,8 +1123,15 @@ async function handleLoadMeetings() {
         const title = item.summary || "회의";
         const timeLabel = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`
           + `-${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
-        return { title, durationMin, timeLabel };
+        return { start, title, durationMin, timeLabel };
       });
+
+    loadedCalendarMeetings = meetings.map((m) => ({
+      start: m.start,
+      durationMin: m.durationMin,
+      title: m.title,
+    }));
+    updateLoadedMeetingsUI();
 
     const rangeMinutes = Math.max(0, Math.round((range.end - range.start) / 60000));
     const totalMinutes = meetings.reduce((sum, meeting) => sum + meeting.durationMin, 0);
@@ -774,10 +1140,10 @@ async function handleLoadMeetings() {
     );
     elements.worklogComment.value = meetings.length
       ? `회의\n${lines.join("\n")}`
-      : "회의";
-    elements.worklogTimeSpent.value = formatDuration(
-      totalMinutes > 0 ? totalMinutes : rangeMinutes
-    );
+      : "회의없음";
+    elements.worklogTimeSpent.value = meetings.length
+      ? formatDuration(totalMinutes)
+      : "8h";
 
     const start = range.start;
     const pad = (value) => String(value).padStart(2, "0");
@@ -787,7 +1153,7 @@ async function handleLoadMeetings() {
     if (!meetings.length) {
       setCalendarStatus("해당 시간 범위에 회의가 없습니다.", "error");
     } else {
-      setCalendarStatus("회의 정보를 입력했습니다.", "success");
+      setCalendarStatus("회의 정보를 입력했습니다. 아래에서 회의별로 Worklog를 저장할 수 있습니다.", "success");
     }
   } catch (error) {
     const message = normalizeErrorMessage(error);
@@ -830,6 +1196,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   elements.useLastIssue.addEventListener("click", handleUseLastIssue);
   elements.clearWorklog.addEventListener("click", handleClearWorklog);
   elements.addWorklog.addEventListener("click", handleAddWorklog);
+  if (elements.addWorklogsFromCalendar) {
+    elements.addWorklogsFromCalendar.addEventListener("click", handleAddWorklogsFromCalendar);
+  }
   elements.googleLogin.addEventListener("click", handleGoogleLogin);
   elements.loadMeetings.addEventListener("click", handleLoadMeetings);
 
@@ -846,4 +1215,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     setActiveTab("worklog");
     await saveActiveTab("worklog");
   });
+  elements.tabMyIssues.addEventListener("click", async () => {
+    setActiveTab("my-issues");
+    await saveActiveTab("my-issues");
+  });
+  elements.loadMyInProgressIssues.addEventListener("click", handleLoadMyInProgressIssues);
+  if (elements.myIssuesPrev) {
+    elements.myIssuesPrev.addEventListener("click", handleMyIssuesPrev);
+  }
+  if (elements.myIssuesNext) {
+    elements.myIssuesNext.addEventListener("click", handleMyIssuesNext);
+  }
 });

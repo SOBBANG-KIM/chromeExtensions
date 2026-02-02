@@ -70,7 +70,8 @@ header h1 {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.tab-panel.hidden {
+.tab-panel.hidden,
+.hidden {
   display: none;
 }
 
@@ -130,8 +131,16 @@ textarea {
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: 16px;
+}
+
+.actions-count {
+  font-size: 12px;
+  color: #5e6c84;
+  margin-right: 0;
 }
 
 button {
@@ -142,15 +151,41 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .primary {
   background: #0052cc;
   color: #ffffff;
   flex: 1;
 }
 
+.primary:disabled {
+  background: #97a0af;
+  color: #ffffff;
+}
+
 .secondary {
   background: #e9eef5;
   color: #172b4d;
+}
+
+.secondary:disabled {
+  background: #f1f2f4;
+  color: #97a0af;
+}
+
+#addWorklogsFromCalendar {
+  background: #000000;
+  color: #ffffff;
+}
+
+#addWorklogsFromCalendar:disabled {
+  background: #97a0af;
+  color: #ffffff;
 }
 
 .status {
@@ -183,4 +218,141 @@ button {
 
 .calendar-status.error {
   color: #ae2a19;
+}
+
+.issue-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.issue-list-item {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: #f1f2f4;
+  border-radius: 8px;
+}
+
+.issue-list-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.issue-list-item-link {
+  flex: 1;
+  font-size: 12px;
+  color: #0052cc;
+  text-decoration: none;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.issue-list-item-link:hover {
+  text-decoration: underline;
+}
+
+.issue-worklog-toggle {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.issue-worklog-form {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #dfe1e6;
+}
+
+.issue-worklog-form.hidden {
+  display: none;
+}
+
+.issue-worklog-form label {
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+.issue-worklog-form input,
+.issue-worklog-form textarea {
+  margin-top: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.issue-worklog-form textarea {
+  min-height: 44px;
+}
+
+.issue-worklog-actions {
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+.issue-worklog-actions button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.issue-list-item-status {
+  margin: 8px 0 0;
+  font-size: 11px;
+  min-height: 14px;
+}
+
+.issue-list-item-status.success {
+  color: #216e4e;
+}
+
+.issue-list-item-status.error {
+  color: #ae2a19;
+}
+
+.issue-list-item-status.loading {
+  color: #5e6c84;
+}
+
+.issue-list-empty {
+  padding: 12px 10px;
+  font-size: 12px;
+  color: #5e6c84;
+}
+
+.issue-paging {
+  margin-top: 10px;
+  padding: 8px 0;
+  border-top: 1px solid #e9eef5;
+}
+
+.issue-paging.hidden {
+  display: none;
+}
+
+.issue-page-info {
+  display: block;
+  font-size: 11px;
+  color: #5e6c84;
+  margin-bottom: 8px;
+}
+
+.issue-paging-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.issue-paging-buttons button {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.issue-filter-row {
+  align-items: flex-end;
+}
+
+.issue-filter-row .issue-filter-actions {
+  margin-top: 0;
+  flex-shrink: 0;
 }
