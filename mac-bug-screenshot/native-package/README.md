@@ -14,6 +14,12 @@ npm install -g @mac-bug-screenshot/native-host
 mac-bug-screenshot-install
 ```
 
+## 삭제
+
+```bash
+npm uninstall -g @mac-bug-screenshot/native-host
+```
+
 ## 동작
 
 - 전체 화면 캡처 후 Preview를 자동으로 엽니다.
