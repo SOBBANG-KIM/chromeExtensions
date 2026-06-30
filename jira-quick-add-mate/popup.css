@@ -116,6 +116,25 @@ textarea {
   resize: vertical;
 }
 
+/* 프로젝트 키 입력칸을 이슈 타입(select)과 동일한 화살표로 통일 */
+#projectKey,
+#issueType,
+#component {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 28px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23172b4d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+/* datalist 기본 화살표는 숨기고 커스텀 화살표만 노출 */
+#projectKey::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  cursor: pointer;
+}
+
 .row {
   display: flex;
   gap: 10px;

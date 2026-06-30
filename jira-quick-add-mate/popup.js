@@ -9,6 +9,7 @@ const GOOGLE_TOKEN_KEY = "googleAuth";
 
 const elements = {
   projectKey: document.getElementById("projectKey"),
+  projectKeyList: document.getElementById("projectKeyList"),
   issueType: document.getElementById("issueType"),
   tabIssue: document.getElementById("tab-issue"),
   tabWorklog: document.getElementById("tab-worklog"),
@@ -20,6 +21,8 @@ const elements = {
   clear: document.getElementById("clear"),
   parentIssueRow: document.getElementById("parentIssueRow"),
   parentIssueKey: document.getElementById("parentIssueKey"),
+  componentRow: document.getElementById("componentRow"),
+  component: document.getElementById("component"),
   worklogIssueKey: document.getElementById("worklogIssueKey"),
   worklogStarted: document.getElementById("worklogStarted"),
   worklogTimeSpent: document.getElementById("worklogTimeSpent"),
@@ -49,6 +52,11 @@ const elements = {
 };
 
 const SETTINGS_FIELDS = ["projectKey", "issueType"];
+const DEFAULT_PROJECT_KEYS = ["DEVP2026", "FTPM", "DBMS", "DEVOPS"];
+let projectKeys = [...DEFAULT_PROJECT_KEYS];
+// 구성요소(components)는 프로젝트별로 조회해, 구성요소가 있는 프로젝트에서만 노출한다.
+const componentsCache = {}; // projectKey(대문자) -> 구성요소 배열
+let loadedComponentsProject = "";
 const DRAFT_FIELDS = ["summary", "description", "parentIssueKey"];
 const WORKLOG_FIELDS = [
   "worklogIssueKey",
@@ -403,6 +411,7 @@ function getFormValues() {
     summary: elements.summary.value.trim(),
     description: elements.description.value.trim(),
     parentIssueKey: elements.parentIssueKey.value.trim(),
+    component: elements.component.value.trim(),
   };
 }
 
@@ -441,6 +450,10 @@ function buildPayload(values) {
 
   if (values.issueType === "부작업" && values.parentIssueKey) {
     fields.parent = { key: values.parentIssueKey };
+  }
+
+  if (values.component) {
+    fields.components = [{ id: values.component }];
   }
 
   if (values.description) {
@@ -518,6 +531,83 @@ function updateParentIssueVisibility() {
   elements.parentIssueRow.style.display = isSubTask ? "block" : "none";
 }
 
+function renderComponentOptions(components, selectedId) {
+  const select = elements.component;
+  select.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "구성요소 선택";
+  select.appendChild(placeholder);
+  components.forEach((component) => {
+    const option = document.createElement("option");
+    option.value = component.id;
+    option.textContent = component.name;
+    select.appendChild(option);
+  });
+  if (selectedId) {
+    select.value = selectedId;
+  }
+}
+
+// 구성요소가 있으면 필드를 표시하고, 없으면 숨긴다.
+function applyComponents(projectKey, components) {
+  // 조회 도중 사용자가 다른 프로젝트 키로 바꿨으면 무시
+  if (loadedComponentsProject !== projectKey) {
+    return;
+  }
+  if (components.length > 0) {
+    renderComponentOptions(components);
+    elements.componentRow.classList.remove("hidden");
+  } else {
+    elements.component.value = "";
+    elements.componentRow.classList.add("hidden");
+  }
+}
+
+async function loadComponents(projectKey) {
+  const key = (projectKey || "").trim().toUpperCase();
+  if (componentsCache[key]) {
+    applyComponents(key, componentsCache[key]);
+    return;
+  }
+  try {
+    const url = `${API_ROOT}/api/${API_VERSION}/project/${encodeURIComponent(key)}/components`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { "Accept": "application/json" },
+    });
+    if (!response.ok) {
+      // 존재하지 않는 키 등은 조용히 숨김 처리
+      applyComponents(key, []);
+      return;
+    }
+    const data = await response.json().catch(() => []);
+    const components = Array.isArray(data) ? data : [];
+    componentsCache[key] = components;
+    applyComponents(key, components);
+  } catch (error) {
+    console.error("구성요소 조회 실패:", error);
+    applyComponents(key, []);
+  }
+}
+
+async function updateComponentVisibility() {
+  const key = elements.projectKey.value.trim().toUpperCase();
+
+  if (!key) {
+    elements.component.value = "";
+    elements.componentRow.classList.add("hidden");
+    loadedComponentsProject = "";
+    return;
+  }
+
+  if (loadedComponentsProject !== key) {
+    loadedComponentsProject = key;
+    await loadComponents(key);
+  }
+}
+
 async function loadFromStorage() {
   const result = await storage.get({
     settings: {
@@ -548,6 +638,7 @@ async function loadFromStorage() {
   });
 
   updateParentIssueVisibility();
+  updateComponentVisibility();
 
   WORKLOG_FIELDS.forEach((field) => {
     elements[field].value = result.worklogDraft[field] || "";
@@ -572,6 +663,33 @@ async function saveSettings() {
     settings[field] = elements[field].value.trim();
   });
   await storage.set({ settings });
+}
+
+function renderProjectKeyOptions() {
+  elements.projectKeyList.innerHTML = "";
+  projectKeys.forEach((key) => {
+    const option = document.createElement("option");
+    option.value = key;
+    elements.projectKeyList.appendChild(option);
+  });
+}
+
+async function loadProjectKeys() {
+  const result = await storage.get({ projectKeys: DEFAULT_PROJECT_KEYS });
+  const stored = Array.isArray(result.projectKeys) ? result.projectKeys : [];
+  // 기본 키를 항상 포함하고, 저장된 키와 합쳐 중복 제거
+  projectKeys = [...new Set([...DEFAULT_PROJECT_KEYS, ...stored])].filter(Boolean);
+  renderProjectKeyOptions();
+}
+
+async function rememberProjectKey(rawKey) {
+  const key = (rawKey || "").trim().toUpperCase();
+  if (!key || projectKeys.includes(key)) {
+    return;
+  }
+  projectKeys.push(key);
+  renderProjectKeyOptions();
+  await storage.set({ projectKeys });
 }
 
 async function saveDraft() {
@@ -672,6 +790,7 @@ async function handleCreate() {
     elements.summary.value = "";
     elements.description.value = "";
     await saveDraft();
+    await rememberProjectKey(values.projectKey);
 
     if (issueKey) {
       lastIssueKey = issueKey;
@@ -1164,16 +1283,46 @@ async function handleLoadMeetings() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-  await loadFromStorage();
-  await checkAuthStatus();
-  await checkGoogleAuthStatus();
-
+function registerEventListeners() {
   SETTINGS_FIELDS.forEach((field) => {
     elements[field].addEventListener("input", saveSettings);
     elements[field].addEventListener("change", saveSettings);
     elements[field].addEventListener("blur", saveSettings);
   });
+
+  elements.projectKey.addEventListener("blur", () => {
+    rememberProjectKey(elements.projectKey.value);
+  });
+
+  let componentDebounce;
+  elements.projectKey.addEventListener("input", () => {
+    clearTimeout(componentDebounce);
+    componentDebounce = setTimeout(updateComponentVisibility, 400);
+  });
+  elements.projectKey.addEventListener("change", updateComponentVisibility);
+  elements.projectKey.addEventListener("blur", updateComponentVisibility);
+
+  // datalist는 입력값과 일치하는 옵션만 보여주므로, 값이 채워져 있으면
+  // 전체 목록이 안 열린다. 포커스 시 잠시 비워 전체 목록을 노출하고,
+  // 선택/입력 없이 벗어나면 이전 값을 복원한다.
+  let projectKeyBeforeFocus = "";
+  elements.projectKey.addEventListener("focus", () => {
+    projectKeyBeforeFocus = elements.projectKey.value;
+    if (projectKeyBeforeFocus) {
+      elements.projectKey.value = "";
+    }
+  });
+  elements.projectKey.addEventListener(
+    "blur",
+    () => {
+      // 캡처 단계에서 먼저 실행되어, 복원된 값으로 저장/조회가 이뤄지게 한다.
+      if (!elements.projectKey.value.trim() && projectKeyBeforeFocus) {
+        elements.projectKey.value = projectKeyBeforeFocus;
+      }
+      projectKeyBeforeFocus = "";
+    },
+    true
+  );
 
   DRAFT_FIELDS.forEach((field) => {
     elements[field].addEventListener("input", saveDraft);
@@ -1226,4 +1375,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (elements.myIssuesNext) {
     elements.myIssuesNext.addEventListener("click", handleMyIssuesNext);
   }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  // UI 인터랙션(탭 전환 등)은 네트워크/인증 초기화와 무관하게 항상 동작해야 하므로
+  // 리스너를 먼저 등록한 뒤 비동기 초기화를 진행한다.
+  registerEventListeners();
+
+  try {
+    await loadFromStorage();
+    await loadProjectKeys();
+  } catch (error) {
+    console.error("초기화 중 오류:", error);
+  }
+
+  // 인증 확인은 실패해도 UI 동작에 영향을 주지 않도록 개별적으로 처리한다.
+  checkAuthStatus().catch((error) => console.error("Jira 인증 확인 실패:", error));
+  checkGoogleAuthStatus().catch((error) => console.error("Google 인증 확인 실패:", error));
 });
