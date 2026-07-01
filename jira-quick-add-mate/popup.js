@@ -9,6 +9,7 @@ const GOOGLE_TOKEN_KEY = "googleAuth";
 
 const elements = {
   projectKey: document.getElementById("projectKey"),
+  projectKeyList: document.getElementById("projectKeyList"),
   issueType: document.getElementById("issueType"),
   tabIssue: document.getElementById("tab-issue"),
   tabWorklog: document.getElementById("tab-worklog"),
@@ -20,6 +21,8 @@ const elements = {
   clear: document.getElementById("clear"),
   parentIssueRow: document.getElementById("parentIssueRow"),
   parentIssueKey: document.getElementById("parentIssueKey"),
+  componentRow: document.getElementById("componentRow"),
+  component: document.getElementById("component"),
   issueExtraFields: document.getElementById("issueExtraFields"),
   worklogIssueKey: document.getElementById("worklogIssueKey"),
   worklogStarted: document.getElementById("worklogStarted"),
@@ -47,6 +50,8 @@ const elements = {
   myIssuesStatus: document.getElementById("myIssuesStatus"),
   myIssuesList: document.getElementById("myIssuesList"),
   myIssuesStatusFilter: document.getElementById("myIssuesStatusFilter"),
+  myIssuesProjectFilter: document.getElementById("myIssuesProjectFilter"),
+  myIssuesProjectFilterRow: document.getElementById("myIssuesProjectFilterRow"),
   myIssuesPaging: document.getElementById("myIssuesPaging"),
   myIssuesPageInfo: document.getElementById("myIssuesPageInfo"),
   myIssuesPrev: document.getElementById("myIssuesPrev"),
@@ -55,6 +60,13 @@ const elements = {
 
 const SETTINGS_FIELDS = ["projectKey", "issueType"];
 const DRAFT_FIELDS = ["summary", "description", "parentIssueKey"];
+// 자주 쓰는 프로젝트 키 (add jira 자동완성용)
+const DEFAULT_PROJECT_KEYS = ["DEVP2026", "FTPM", "DBMS", "DEVOPS"];
+let projectKeys = [...DEFAULT_PROJECT_KEYS];
+// 구성요소(components)는 전용 셀렉터로 다루므로 createmeta 동적 필드에서는 제외한다.
+const componentsCache = {}; // projectKey(대문자) -> 구성요소 배열
+let loadedComponentsProject = "";
+const myIssuesProjectOptionsCache = {}; // 상태 텍스트 -> [[key, name], ...]
 const WORKLOG_FIELDS = [
   "worklogIssueKey",
   "worklogStarted",
@@ -474,7 +486,7 @@ function getWorklogDateTimeValue() {
   return formatJiraDateTime(date);
 }
 
-const ISSUE_FIELDS_SKIP = new Set(["project", "issuetype", "summary", "description", "parent", "assignee", "reporter"]);
+const ISSUE_FIELDS_SKIP = new Set(["project", "issuetype", "summary", "description", "parent", "assignee", "reporter", "components"]);
 
 function getFormValues() {
   return {
@@ -483,6 +495,7 @@ function getFormValues() {
     summary: elements.summary.value.trim(),
     description: elements.description.value.trim(),
     parentIssueKey: elements.parentIssueKey.value.trim(),
+    component: elements.component.value.trim(),
   };
 }
 
@@ -675,6 +688,11 @@ function buildPayload(values) {
   const extra = getExtraFieldsValues();
   Object.assign(fields, extra);
 
+  // 구성요소는 전용 셀렉터가 단독 소유 (createmeta 동적 필드에서는 제외됨)
+  if (values.component) {
+    fields.components = [{ id: values.component }];
+  }
+
   return { fields };
 }
 
@@ -745,6 +763,107 @@ function updateParentIssueVisibility() {
   elements.parentIssueRow.style.display = isSubTask ? "block" : "none";
 }
 
+// ── 프로젝트 키 즐겨찾기(datalist) ───────────────────────────────
+function renderProjectKeyOptions() {
+  elements.projectKeyList.innerHTML = "";
+  projectKeys.forEach((key) => {
+    const option = document.createElement("option");
+    option.value = key;
+    elements.projectKeyList.appendChild(option);
+  });
+}
+
+async function loadProjectKeys() {
+  const result = await storage.get({ projectKeys: DEFAULT_PROJECT_KEYS });
+  const stored = Array.isArray(result.projectKeys) ? result.projectKeys : [];
+  projectKeys = [...new Set([...DEFAULT_PROJECT_KEYS, ...stored])].filter(Boolean);
+  renderProjectKeyOptions();
+}
+
+async function rememberProjectKey(rawKey) {
+  const key = (rawKey || "").trim().toUpperCase();
+  if (!key || projectKeys.includes(key)) {
+    return;
+  }
+  projectKeys.push(key);
+  renderProjectKeyOptions();
+  await storage.set({ projectKeys });
+}
+
+// ── 구성요소(components) 전용 셀렉터 ─────────────────────────────
+function renderComponentOptions(components, selectedId) {
+  const select = elements.component;
+  select.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "구성요소 선택";
+  select.appendChild(placeholder);
+  components.forEach((component) => {
+    const option = document.createElement("option");
+    option.value = component.id;
+    option.textContent = component.name;
+    select.appendChild(option);
+  });
+  if (selectedId) {
+    select.value = selectedId;
+  }
+}
+
+// 구성요소가 있으면 필드를 표시하고, 없으면 숨긴다.
+function applyComponents(projectKey, components) {
+  if (loadedComponentsProject !== projectKey) {
+    return; // 조회 도중 프로젝트 키가 바뀌었으면 무시
+  }
+  if (components.length > 0) {
+    renderComponentOptions(components);
+    elements.componentRow.classList.remove("hidden");
+  } else {
+    elements.component.value = "";
+    elements.componentRow.classList.add("hidden");
+  }
+}
+
+async function loadComponents(projectKey) {
+  const key = (projectKey || "").trim().toUpperCase();
+  if (componentsCache[key]) {
+    applyComponents(key, componentsCache[key]);
+    return;
+  }
+  try {
+    const url = `${API_ROOT}/api/${API_VERSION}/project/${encodeURIComponent(key)}/components`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      applyComponents(key, []); // 없는 키 등은 조용히 숨김
+      return;
+    }
+    const data = await response.json().catch(() => []);
+    const components = Array.isArray(data) ? data : [];
+    componentsCache[key] = components;
+    applyComponents(key, components);
+  } catch (error) {
+    console.error("구성요소 조회 실패:", error);
+    applyComponents(key, []);
+  }
+}
+
+async function updateComponentVisibility() {
+  const key = elements.projectKey.value.trim().toUpperCase();
+  if (!key) {
+    elements.component.value = "";
+    elements.componentRow.classList.add("hidden");
+    loadedComponentsProject = "";
+    return;
+  }
+  if (loadedComponentsProject !== key) {
+    loadedComponentsProject = key;
+    await loadComponents(key);
+  }
+}
+
 /** 프로젝트/이슈타입에 맞는 createmeta 조회 후 동적 필드 렌더 */
 async function loadIssueCreateMetaAndRender() {
   const projectKey = elements.projectKey?.value?.trim();
@@ -787,6 +906,7 @@ async function loadFromStorage() {
   });
 
   updateParentIssueVisibility();
+  updateComponentVisibility();
 
   WORKLOG_FIELDS.forEach((field) => {
     elements[field].value = result.worklogDraft[field] || "";
@@ -1089,10 +1209,77 @@ function escapeStatusForJql(status) {
   return status.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
+function getMyIssuesProjectFilter() {
+  return elements.myIssuesProjectFilter?.value?.trim() || "";
+}
+
+// 현재 상태 조건으로, 내게 할당된 이슈들의 프로젝트만 추려 드롭다운 옵션을 채운다.
+async function loadMyIssuesProjectOptions() {
+  const statusText = getMyIssuesStatusFilter();
+  let projects = myIssuesProjectOptionsCache[statusText];
+
+  if (!projects) {
+    try {
+      const escaped = escapeStatusForJql(statusText);
+      const params = new URLSearchParams({
+        jql: `assignee = currentUser() AND status = "${escaped}"`,
+        fields: "project",
+        maxResults: "200",
+        startAt: "0",
+      });
+      const url = `${API_ROOT}/api/${API_VERSION}/search?${params.toString()}`;
+      const response = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      const issues = data.issues || [];
+      const projectMap = new Map();
+      issues.forEach((issue) => {
+        const project = issue.fields?.project;
+        if (project?.key && !projectMap.has(project.key)) {
+          projectMap.set(project.key, project.name || project.key);
+        }
+      });
+      projects = [...projectMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      myIssuesProjectOptionsCache[statusText] = projects;
+    } catch (error) {
+      console.error("내 이슈 프로젝트 목록 조회 실패:", error);
+      return;
+    }
+  }
+
+  const select = elements.myIssuesProjectFilter;
+  const current = select.value;
+  const keys = projects.map(([key]) => key);
+  select.innerHTML = "";
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = "전체";
+  select.appendChild(allOption);
+  projects.forEach(([key, name]) => {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = name && name !== key ? `${key} - ${name}` : key;
+    select.appendChild(option);
+  });
+  select.value = keys.includes(current) ? current : "";
+
+  elements.myIssuesProjectFilterRow.classList.remove("hidden");
+}
+
 async function fetchMyInProgressIssues(startAt = 0) {
   const statusText = getMyIssuesStatusFilter();
   const escaped = escapeStatusForJql(statusText);
-  const jql = `assignee = currentUser() AND status = "${escaped}"`;
+  let jql = `assignee = currentUser() AND status = "${escaped}"`;
+  const projectKey = getMyIssuesProjectFilter();
+  if (projectKey) {
+    jql += ` AND project = "${escapeStatusForJql(projectKey)}"`;
+  }
   const params = new URLSearchParams({
     jql,
     fields: "summary,status",
@@ -1302,6 +1489,8 @@ async function loadMyIssuesPage(pageIndex) {
 }
 
 async function handleLoadMyInProgressIssues() {
+  // 프로젝트 드롭다운 옵션(현재 상태의 내 프로젝트)을 채운다.
+  await loadMyIssuesProjectOptions();
   await loadMyIssuesPage(0);
 }
 
@@ -1409,11 +1598,7 @@ async function handleLoadMeetings() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-  await loadFromStorage();
-  await checkAuthStatus();
-  await checkGoogleAuthStatus();
-
+function registerEventListeners() {
   SETTINGS_FIELDS.forEach((field) => {
     elements[field].addEventListener("input", saveSettings);
     elements[field].addEventListener("change", saveSettings);
@@ -1455,8 +1640,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     saveSettings();
     loadIssueCreateMetaAndRender();
   });
-  elements.projectKey.addEventListener("change", () => loadIssueCreateMetaAndRender());
-  elements.projectKey.addEventListener("blur", () => loadIssueCreateMetaAndRender());
+  // 프로젝트 키: createmeta 갱신 + 구성요소 표시
+  elements.projectKey.addEventListener("change", () => {
+    loadIssueCreateMetaAndRender();
+    updateComponentVisibility();
+  });
+  let componentDebounce;
+  elements.projectKey.addEventListener("input", () => {
+    clearTimeout(componentDebounce);
+    componentDebounce = setTimeout(updateComponentVisibility, 400);
+  });
+  // datalist는 입력값과 일치하는 옵션만 보여주므로, 포커스 시 잠시 비워 전체 목록을
+  // 노출하고, 선택/입력 없이 벗어나면 이전 값을 복원한다(캡처 단계로 먼저 실행).
+  let projectKeyBeforeFocus = "";
+  elements.projectKey.addEventListener("focus", () => {
+    projectKeyBeforeFocus = elements.projectKey.value;
+    if (projectKeyBeforeFocus) {
+      elements.projectKey.value = "";
+    }
+  });
+  elements.projectKey.addEventListener(
+    "blur",
+    () => {
+      if (!elements.projectKey.value.trim() && projectKeyBeforeFocus) {
+        elements.projectKey.value = projectKeyBeforeFocus;
+      }
+      projectKeyBeforeFocus = "";
+    },
+    true
+  );
+  elements.projectKey.addEventListener("blur", () => {
+    rememberProjectKey(elements.projectKey.value);
+    updateComponentVisibility();
+    loadIssueCreateMetaAndRender();
+  });
 
   elements.tabIssue.addEventListener("click", async () => {
     setActiveTab("issue");
@@ -1474,10 +1691,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     await saveActiveTab("my-issues");
   });
   elements.loadMyInProgressIssues.addEventListener("click", handleLoadMyInProgressIssues);
+  if (elements.myIssuesProjectFilter) {
+    // 프로젝트를 바꾸면 해당 프로젝트만 Jira에서 다시 조회한다.
+    elements.myIssuesProjectFilter.addEventListener("change", handleLoadMyInProgressIssues);
+  }
   if (elements.myIssuesPrev) {
     elements.myIssuesPrev.addEventListener("click", handleMyIssuesPrev);
   }
   if (elements.myIssuesNext) {
     elements.myIssuesNext.addEventListener("click", handleMyIssuesNext);
   }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  // UI 인터랙션(탭 전환 등)은 네트워크/인증 초기화와 무관하게 항상 동작해야 하므로
+  // 리스너를 먼저 등록한 뒤 비동기 초기화를 진행한다.
+  registerEventListeners();
+
+  try {
+    await loadFromStorage();
+    await loadProjectKeys();
+  } catch (error) {
+    console.error("초기화 중 오류:", error);
+  }
+
+  // 인증 확인은 실패/지연해도 UI 동작을 막지 않도록 개별 처리한다.
+  checkAuthStatus().catch((error) => console.error("Jira 인증 확인 실패:", error));
+  checkGoogleAuthStatus().catch((error) => console.error("Google 인증 확인 실패:", error));
 });
