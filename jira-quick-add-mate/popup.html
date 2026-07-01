@@ -190,7 +190,10 @@
         aria-labelledby="tab-my-issues"
       >
         <section class="card">
-          <h2>내 이슈 목록</h2>
+          <div class="my-issues-header">
+            <h2>내 이슈 목록</h2>
+            <span id="myIssuesStatus" class="calendar-status"></span>
+          </div>
           <div class="row issue-filter-row">
             <div style="width: 60px; margin-bottom: 8px;">상태: </div>
             <input id="myIssuesStatusFilter" type="text" placeholder="진행 중" value="진행 중" style="margin-top: 0;"/>
@@ -200,13 +203,18 @@
               </button>
             </div>
           </div>
-          <p id="myIssuesStatus" class="calendar-status"></p>
           <div id="myIssuesPaging" class="issue-paging hidden">
             <span id="myIssuesPageInfo" class="issue-page-info"></span>
             <div class="issue-paging-buttons">
               <button id="myIssuesPrev" class="secondary" type="button">이전</button>
               <button id="myIssuesNext" class="secondary" type="button">다음</button>
             </div>
+          </div>
+          <div id="myIssuesProjectFilterRow" class="row issue-filter-row hidden">
+            <div style="width: 60px; margin-bottom: 8px;">프로젝트: </div>
+            <select id="myIssuesProjectFilter" style="margin-top: 0;">
+              <option value="">전체</option>
+            </select>
           </div>
           <ul id="myIssuesList" class="issue-list" aria-live="polite"></ul>
         </section>

@@ -45,6 +45,8 @@ const elements = {
   myIssuesStatus: document.getElementById("myIssuesStatus"),
   myIssuesList: document.getElementById("myIssuesList"),
   myIssuesStatusFilter: document.getElementById("myIssuesStatusFilter"),
+  myIssuesProjectFilter: document.getElementById("myIssuesProjectFilter"),
+  myIssuesProjectFilterRow: document.getElementById("myIssuesProjectFilterRow"),
   myIssuesPaging: document.getElementById("myIssuesPaging"),
   myIssuesPageInfo: document.getElementById("myIssuesPageInfo"),
   myIssuesPrev: document.getElementById("myIssuesPrev"),
@@ -966,10 +968,81 @@ function escapeStatusForJql(status) {
   return status.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
+function getMyIssuesProjectFilter() {
+  return elements.myIssuesProjectFilter?.value?.trim() || "";
+}
+
+const myIssuesProjectOptionsCache = {}; // 상태 텍스트 -> [[key, name], ...]
+
+// 현재 상태 조건으로, 내게 할당된 이슈들의 프로젝트만 추려 드롭다운 옵션을 채운다.
+// (현재 페이지가 아니라 해당 상태의 내 이슈 전체 기준이라, 페이지를 넘겨도 옵션이 줄지 않는다.)
+async function loadMyIssuesProjectOptions() {
+  const statusText = getMyIssuesStatusFilter();
+  let projects = myIssuesProjectOptionsCache[statusText];
+
+  if (!projects) {
+    try {
+      const escaped = escapeStatusForJql(statusText);
+      const params = new URLSearchParams({
+        jql: `assignee = currentUser() AND status = "${escaped}"`,
+        fields: "project",
+        maxResults: "200",
+        startAt: "0",
+      });
+      const url = `${API_ROOT}/api/${API_VERSION}/search?${params.toString()}`;
+      const response = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
+      const issues = data.issues || [];
+      const projectMap = new Map();
+      issues.forEach((issue) => {
+        const project = issue.fields?.project;
+        if (project?.key && !projectMap.has(project.key)) {
+          projectMap.set(project.key, project.name || project.key);
+        }
+      });
+      projects = [...projectMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      myIssuesProjectOptionsCache[statusText] = projects;
+    } catch (error) {
+      console.error("내 이슈 프로젝트 목록 조회 실패:", error);
+      return;
+    }
+  }
+
+  const select = elements.myIssuesProjectFilter;
+  const current = select.value;
+  const keys = projects.map(([key]) => key);
+  select.innerHTML = "";
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = "전체";
+  select.appendChild(allOption);
+  projects.forEach(([key, name]) => {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = name && name !== key ? `${key} - ${name}` : key;
+    select.appendChild(option);
+  });
+  // 이전 선택이 현재 상태에서도 유효하면 유지, 아니면 전체로
+  select.value = keys.includes(current) ? current : "";
+
+  elements.myIssuesProjectFilterRow.classList.remove("hidden");
+}
+
 async function fetchMyInProgressIssues(startAt = 0) {
   const statusText = getMyIssuesStatusFilter();
   const escaped = escapeStatusForJql(statusText);
-  const jql = `assignee = currentUser() AND status = "${escaped}"`;
+  let jql = `assignee = currentUser() AND status = "${escaped}"`;
+  const projectKey = getMyIssuesProjectFilter();
+  if (projectKey) {
+    jql += ` AND project = "${escapeStatusForJql(projectKey)}"`;
+  }
   const params = new URLSearchParams({
     jql,
     fields: "summary,status",
@@ -1179,6 +1252,8 @@ async function loadMyIssuesPage(pageIndex) {
 }
 
 async function handleLoadMyInProgressIssues() {
+  // 프로젝트 드롭다운 옵션(내 이슈 전체 프로젝트)을 최초 1회 채운다.
+  await loadMyIssuesProjectOptions();
   await loadMyIssuesPage(0);
 }
 
@@ -1369,6 +1444,10 @@ function registerEventListeners() {
     await saveActiveTab("my-issues");
   });
   elements.loadMyInProgressIssues.addEventListener("click", handleLoadMyInProgressIssues);
+  if (elements.myIssuesProjectFilter) {
+    // 프로젝트를 바꾸면 해당 프로젝트만 Jira에서 다시 조회한다.
+    elements.myIssuesProjectFilter.addEventListener("change", handleLoadMyInProgressIssues);
+  }
   if (elements.myIssuesPrev) {
     elements.myIssuesPrev.addEventListener("click", handleMyIssuesPrev);
   }

@@ -92,6 +92,21 @@ h3 {
   font-size: 14px;
 }
 
+.my-issues-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.my-issues-header h2 {
+  margin: 0;
+}
+
+.my-issues-header #myIssuesStatus {
+  margin: 0;
+}
+
 label {
   display: block;
   margin-bottom: 10px;
@@ -340,6 +355,10 @@ button:disabled {
 }
 
 .issue-paging {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-top: 10px;
   padding: 8px 0;
   border-top: 1px solid #e9eef5;
@@ -350,25 +369,32 @@ button:disabled {
 }
 
 .issue-page-info {
-  display: block;
   font-size: 11px;
   color: #5e6c84;
-  margin-bottom: 8px;
+  white-space: nowrap;
 }
 
 .issue-paging-buttons {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .issue-paging-buttons button {
-  flex: 1;
-  padding: 6px 8px;
+  padding: 6px 12px;
   font-size: 12px;
 }
 
 .issue-filter-row {
   align-items: flex-end;
+}
+
+.issue-filter-row + .issue-filter-row {
+  margin-top: 14px;
+}
+
+#myIssuesProjectFilterRow {
+  margin-top: 12px;
 }
 
 .issue-filter-row .issue-filter-actions {
