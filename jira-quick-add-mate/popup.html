@@ -57,14 +57,7 @@
           <div class="row">
             <label class="grow">
               프로젝트 키
-              <input
-                id="projectKey"
-                type="text"
-                placeholder="FTPM"
-                list="projectKeyList"
-                autocomplete="off"
-              />
-              <datalist id="projectKeyList"></datalist>
+              <input id="projectKey" type="text" placeholder="FTPM" />
             </label>
             <label class="grow">
               이슈 타입 (이름)
@@ -76,16 +69,11 @@
               </select>
             </label>
           </div>
-          <label id="componentRow" class="hidden">
-            구성요소
-            <select id="component">
-              <option value="">구성요소 선택</option>
-            </select>
-          </label>
           <label id="parentIssueRow">
             상위 이슈 키
             <input id="parentIssueKey" type="text" placeholder="FTPM-1234" />
           </label>
+          <div id="issueExtraFields" class="issue-extra-fields" aria-live="polite"></div>
           <label>
             요약
             <input id="summary" type="text" placeholder="요약을 입력하세요" />
@@ -149,33 +137,39 @@
             <span id="loadedMeetingsCount" class="calendar-status" aria-live="polite"></span>
           </div>
           <p id="calendarStatus" class="calendar-status"></p>
-          <div class="divider"></div>
-          <div class="row">
-            <label class="grow" style="max-width: 230px;">
-              시작 시각
-              <input id="worklogStarted" type="datetime-local" />
-            </label>
-            <label class="grow wide">
-              작업 시간
-              <input id="worklogTimeSpent" type="text" placeholder="16h" />
+          <nav class="worklog-mode-tabs" role="tablist" aria-label="저장 방식">
+            <button id="tab-worklog-per-meeting" class="worklog-mode-tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-worklog-per-meeting">
+              회의별로 저장
+            </button>
+            <button id="tab-worklog-once" class="worklog-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-worklog-once">
+              한번에 저장
+            </button>
+          </nav>
+          <div id="panel-worklog-per-meeting" class="worklog-mode-panel" role="tabpanel" aria-labelledby="tab-worklog-per-meeting">
+            <div id="loadedMeetingsList" class="loaded-meetings-list hidden" aria-live="polite"></div>
+          </div>
+          <div id="panel-worklog-once" class="worklog-mode-panel hidden" role="tabpanel" aria-labelledby="tab-worklog-once">
+            <div class="divider"></div>
+            <div class="row">
+              <label class="grow" style="max-width: 230px;">
+                시작 시각 (ex: 1w/3d/4h/30m/1h 30m))
+                <input id="worklogStarted" type="datetime-local" />
+              </label>
+              <label class="grow wide">
+                작업 시간
+                <input id="worklogTimeSpent" type="text" placeholder="16h" />
+              </label>
+            </div>
+            <label>
+              설명
+              <textarea id="worklogComment" rows="4" placeholder="간단한 작업 내용을 입력하세요"></textarea>
             </label>
           </div>
-          <label>
-            설명
-            <textarea
-              id="worklogComment"
-              rows="4"
-              placeholder="간단한 작업 내용을 입력하세요"
-            ></textarea>
-          </label>
         </section>
 
         <section class="actions">
           <button id="addWorklog" class="primary" type="button">
-            한번에 저장
-          </button>
-          <button id="addWorklogsFromCalendar" class="primary" type="button" disabled>
-            회의별로 저장
+            저장
           </button>
           <button id="clearWorklog" class="secondary" type="button">
             입력 초기화
@@ -190,10 +184,7 @@
         aria-labelledby="tab-my-issues"
       >
         <section class="card">
-          <div class="my-issues-header">
-            <h2>내 이슈 목록</h2>
-            <span id="myIssuesStatus" class="calendar-status"></span>
-          </div>
+          <h2>내 이슈 목록</h2>
           <div class="row issue-filter-row">
             <div style="width: 60px; margin-bottom: 8px;">상태: </div>
             <input id="myIssuesStatusFilter" type="text" placeholder="진행 중" value="진행 중" style="margin-top: 0;"/>
@@ -203,18 +194,13 @@
               </button>
             </div>
           </div>
+          <p id="myIssuesStatus" class="calendar-status"></p>
           <div id="myIssuesPaging" class="issue-paging hidden">
             <span id="myIssuesPageInfo" class="issue-page-info"></span>
             <div class="issue-paging-buttons">
               <button id="myIssuesPrev" class="secondary" type="button">이전</button>
               <button id="myIssuesNext" class="secondary" type="button">다음</button>
             </div>
-          </div>
-          <div id="myIssuesProjectFilterRow" class="row issue-filter-row hidden">
-            <div style="width: 60px; margin-bottom: 8px;">프로젝트: </div>
-            <select id="myIssuesProjectFilter" style="margin-top: 0;">
-              <option value="">전체</option>
-            </select>
           </div>
           <ul id="myIssuesList" class="issue-list" aria-live="polite"></ul>
         </section>

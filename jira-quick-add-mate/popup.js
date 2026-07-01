@@ -9,7 +9,6 @@ const GOOGLE_TOKEN_KEY = "googleAuth";
 
 const elements = {
   projectKey: document.getElementById("projectKey"),
-  projectKeyList: document.getElementById("projectKeyList"),
   issueType: document.getElementById("issueType"),
   tabIssue: document.getElementById("tab-issue"),
   tabWorklog: document.getElementById("tab-worklog"),
@@ -21,8 +20,7 @@ const elements = {
   clear: document.getElementById("clear"),
   parentIssueRow: document.getElementById("parentIssueRow"),
   parentIssueKey: document.getElementById("parentIssueKey"),
-  componentRow: document.getElementById("componentRow"),
-  component: document.getElementById("component"),
+  issueExtraFields: document.getElementById("issueExtraFields"),
   worklogIssueKey: document.getElementById("worklogIssueKey"),
   worklogStarted: document.getElementById("worklogStarted"),
   worklogTimeSpent: document.getElementById("worklogTimeSpent"),
@@ -34,8 +32,12 @@ const elements = {
   loadMeetings: document.getElementById("loadMeetings"),
   calendarStatus: document.getElementById("calendarStatus"),
   addWorklog: document.getElementById("addWorklog"),
-  addWorklogsFromCalendar: document.getElementById("addWorklogsFromCalendar"),
   loadedMeetingsCount: document.getElementById("loadedMeetingsCount"),
+  loadedMeetingsList: document.getElementById("loadedMeetingsList"),
+  tabWorklogOnce: document.getElementById("tab-worklog-once"),
+  tabWorklogPerMeeting: document.getElementById("tab-worklog-per-meeting"),
+  panelWorklogOnce: document.getElementById("panel-worklog-once"),
+  panelWorklogPerMeeting: document.getElementById("panel-worklog-per-meeting"),
   clearWorklog: document.getElementById("clearWorklog"),
   authStatus: document.getElementById("authStatus"),
   status: document.getElementById("status"),
@@ -45,8 +47,6 @@ const elements = {
   myIssuesStatus: document.getElementById("myIssuesStatus"),
   myIssuesList: document.getElementById("myIssuesList"),
   myIssuesStatusFilter: document.getElementById("myIssuesStatusFilter"),
-  myIssuesProjectFilter: document.getElementById("myIssuesProjectFilter"),
-  myIssuesProjectFilterRow: document.getElementById("myIssuesProjectFilterRow"),
   myIssuesPaging: document.getElementById("myIssuesPaging"),
   myIssuesPageInfo: document.getElementById("myIssuesPageInfo"),
   myIssuesPrev: document.getElementById("myIssuesPrev"),
@@ -54,11 +54,6 @@ const elements = {
 };
 
 const SETTINGS_FIELDS = ["projectKey", "issueType"];
-const DEFAULT_PROJECT_KEYS = ["DEVP2026", "FTPM", "DBMS", "DEVOPS"];
-let projectKeys = [...DEFAULT_PROJECT_KEYS];
-// 구성요소(components)는 프로젝트별로 조회해, 구성요소가 있는 프로젝트에서만 노출한다.
-const componentsCache = {}; // projectKey(대문자) -> 구성요소 배열
-let loadedComponentsProject = "";
 const DRAFT_FIELDS = ["summary", "description", "parentIssueKey"];
 const WORKLOG_FIELDS = [
   "worklogIssueKey",
@@ -72,8 +67,13 @@ const WORKLOG_FIELDS = [
 let lastIssueKey = "";
 let currentUserId = "";
 const MY_ISSUES_PAGE_SIZE = 10;
-/** 캘린더에서 불러온 회의 목록 (회의별 Worklog 저장용). 각 항목: { start: Date, durationMin: number, title: string } */
+/** 캘린더에서 불러온 회의 목록 (회의별 Worklog 저장용). 각 항목: { start, durationMin, title, timeLabel?, selected } */
 let loadedCalendarMeetings = [];
+/** worklog 저장 방식: 'once' | 'per-meeting' (회의별로 저장이 첫 번째 탭) */
+let worklogMode = "per-meeting";
+
+/** add jira: 프로젝트/이슈타입별 createmeta 필드 (동적 필드 렌더링용) */
+let issueCreateMetaFields = null;
 let myIssuesTotal = 0;
 let myIssuesCurrentPage = 0;
 
@@ -106,13 +106,81 @@ function setCalendarStatus(message, type = "") {
   elements.calendarStatus.textContent = message;
 }
 
+function getSelectedMeetingsCount() {
+  return loadedCalendarMeetings.filter((m) => m.selected !== false).length;
+}
+
+function setWorklogMode(mode) {
+  worklogMode = mode;
+  const isPerMeeting = mode === "per-meeting";
+  elements.tabWorklogPerMeeting?.classList.toggle("active", isPerMeeting);
+  elements.tabWorklogPerMeeting?.setAttribute("aria-selected", String(isPerMeeting));
+  elements.panelWorklogPerMeeting?.classList.toggle("hidden", !isPerMeeting);
+  elements.tabWorklogOnce?.classList.toggle("active", !isPerMeeting);
+  elements.tabWorklogOnce?.setAttribute("aria-selected", String(!isPerMeeting));
+  elements.panelWorklogOnce?.classList.toggle("hidden", isPerMeeting);
+  if (elements.addWorklog) {
+    if (isPerMeeting) {
+      elements.addWorklog.disabled = getSelectedMeetingsCount() === 0;
+    } else {
+      elements.addWorklog.disabled = false;
+    }
+  }
+}
+
+function renderLoadedMeetingsList() {
+  const listEl = elements.loadedMeetingsList;
+  if (!listEl) return;
+  listEl.innerHTML = "";
+  if (!loadedCalendarMeetings.length) {
+    listEl.classList.add("hidden");
+    return;
+  }
+  listEl.classList.remove("hidden");
+  const title = document.createElement("p");
+  title.className = "loaded-meetings-title";
+  title.textContent = "저장할 회의 선택 (체크 해제 시 제외)";
+  listEl.appendChild(title);
+  for (let i = 0; i < loadedCalendarMeetings.length; i += 1) {
+    const meeting = loadedCalendarMeetings[i];
+    const row = document.createElement("label");
+    row.className = "loaded-meeting-row";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = meeting.selected !== false;
+    checkbox.setAttribute("aria-label", `${meeting.title} ${meeting.timeLabel || ""} 저장 여부`);
+    checkbox.addEventListener("change", () => {
+      meeting.selected = checkbox.checked;
+      updateLoadedMeetingsUI();
+    });
+    const text = document.createElement("span");
+    text.className = "loaded-meeting-text";
+    text.textContent = meeting.timeLabel ? `${meeting.timeLabel} ${meeting.title}` : meeting.title;
+    row.appendChild(checkbox);
+    row.appendChild(text);
+    listEl.appendChild(row);
+  }
+}
+
 function updateLoadedMeetingsUI() {
   const count = loadedCalendarMeetings.length;
+  const selectedCount = getSelectedMeetingsCount();
   if (elements.loadedMeetingsCount) {
-    elements.loadedMeetingsCount.textContent = count ? `${count}개 회의 불러옴` : "";
+    if (count === 0) {
+      elements.loadedMeetingsCount.textContent = "";
+    } else {
+      elements.loadedMeetingsCount.textContent =
+        selectedCount === count
+          ? `${count}개 회의 불러옴`
+          : `${count}개 중 ${selectedCount}개 선택`;
+    }
   }
-  if (elements.addWorklogsFromCalendar) {
-    elements.addWorklogsFromCalendar.disabled = count === 0;
+  if (elements.addWorklog && worklogMode === "per-meeting") {
+    elements.addWorklog.disabled = selectedCount === 0;
+  }
+  if (count === 0 && elements.loadedMeetingsList) {
+    elements.loadedMeetingsList.innerHTML = "";
+    elements.loadedMeetingsList.classList.add("hidden");
   }
 }
 
@@ -406,6 +474,8 @@ function getWorklogDateTimeValue() {
   return formatJiraDateTime(date);
 }
 
+const ISSUE_FIELDS_SKIP = new Set(["project", "issuetype", "summary", "description", "parent", "assignee", "reporter"]);
+
 function getFormValues() {
   return {
     projectKey: elements.projectKey.value.trim(),
@@ -413,8 +483,145 @@ function getFormValues() {
     summary: elements.summary.value.trim(),
     description: elements.description.value.trim(),
     parentIssueKey: elements.parentIssueKey.value.trim(),
-    component: elements.component.value.trim(),
   };
+}
+
+/** Jira createmeta 조회 후 필수/선택 필드 목록 반환 */
+async function fetchIssueCreateMeta(projectKey, issueTypeName) {
+  if (!projectKey || !issueTypeName) return null;
+  const params = new URLSearchParams({
+    projectKeys: projectKey,
+    issuetypeNames: issueTypeName,
+    expand: "projects.issuetypes.fields",
+  });
+  const url = `${API_ROOT}/api/${API_VERSION}/issue/createmeta?${params.toString()}`;
+  const res = await fetch(url, { method: "GET", credentials: "include", headers: { Accept: "application/json" } });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  if (!data?.projects?.length) return null;
+  const project = data.projects.find((p) => (p.key || p.id) === projectKey);
+  if (!project?.issuetypes?.length) return null;
+  const it = project.issuetypes.find(
+    (t) => (t.name || "").toLowerCase() === (issueTypeName || "").toLowerCase()
+  );
+  if (!it?.fields) return null;
+  const list = [];
+  for (const [fieldId, meta] of Object.entries(it.fields)) {
+    if (ISSUE_FIELDS_SKIP.has(fieldId)) continue;
+    if (meta.schema?.system === "parent" && fieldId !== "parent") continue;
+    if (!meta.required) continue;
+    list.push({
+      id: fieldId,
+      name: meta.name || fieldId,
+      required: true,
+      schema: meta.schema || {},
+      allowedValues: meta.allowedValues || [],
+    });
+  }
+  return list;
+}
+
+/** 동적 이슈 필드 UI 렌더링 */
+function renderIssueExtraFields(fields) {
+  const container = elements.issueExtraFields;
+  if (!container) return;
+  container.innerHTML = "";
+  if (!fields?.length) return;
+  for (const f of fields) {
+    const label = document.createElement("label");
+    label.className = "issue-extra-field";
+    const span = document.createElement("span");
+    span.className = "issue-extra-field-label";
+    span.textContent = f.name + (f.required ? " *" : "");
+    label.appendChild(span);
+    if (f.allowedValues?.length > 0) {
+      const select = document.createElement("select");
+      select.dataset.fieldId = f.id;
+      select.dataset.fieldType = "select";
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = f.required ? "선택하세요" : "(선택)";
+      select.appendChild(empty);
+      for (const opt of f.allowedValues) {
+        const idVal = opt.id;
+        const val = opt.value ?? opt.name ?? "";
+        const name = opt.value ?? opt.name ?? String(idVal ?? val);
+        const option = document.createElement("option");
+        option.value = String(idVal ?? val);
+        option.textContent = name;
+        if (idVal !== undefined && idVal !== null) option.dataset.optionId = String(idVal);
+        else if (val !== undefined && val !== null) option.dataset.optionValue = String(val);
+        select.appendChild(option);
+      }
+      label.appendChild(select);
+    } else {
+      const schema = f.schema?.type || "";
+      const input = document.createElement("input");
+      input.dataset.fieldId = f.id;
+      input.dataset.fieldType = schema === "number" ? "number" : "string";
+      if (schema === "number") {
+        input.type = "number";
+        input.placeholder = "0";
+      } else {
+        input.type = "text";
+        input.placeholder = f.required ? "필수" : "선택";
+      }
+      label.appendChild(input);
+    }
+    container.appendChild(label);
+  }
+}
+
+/** 동적 필드에서 값 수집 (payload.fields 형식) */
+function getExtraFieldsValues() {
+  const container = elements.issueExtraFields;
+  const out = {};
+  if (!container) return out;
+  const selects = container.querySelectorAll("select[data-field-id]");
+  const inputs = container.querySelectorAll("input[data-field-id]");
+  for (const el of selects) {
+    const id = el.dataset.fieldId;
+    const val = el.value?.trim();
+    if (!val) continue;
+    const opt = el.options[el.selectedIndex];
+    if (opt?.dataset?.optionId) out[id] = { id: opt.dataset.optionId };
+    else if (opt?.dataset?.optionValue !== undefined) out[id] = { value: opt.dataset.optionValue };
+    else out[id] = { value: val };
+  }
+  for (const el of inputs) {
+    const id = el.dataset.fieldId;
+    const type = el.dataset.fieldType;
+    const val = el.value?.trim();
+    if (val === "") continue;
+    out[id] = type === "number" ? Number(val) : val;
+  }
+  return out;
+}
+
+/** 동적 필드 필수값 검사 (빈 문자열/미선택) */
+function validateExtraFields() {
+  if (!issueCreateMetaFields?.length) return "";
+  const container = elements.issueExtraFields;
+  if (!container) return "";
+  for (const f of issueCreateMetaFields) {
+    if (!f.required) continue;
+    const el = container.querySelector(`[data-field-id="${f.id}"]`);
+    if (!el) continue;
+    const val = el.tagName === "SELECT" ? el.value?.trim() : el.value?.trim();
+    if (!val) return `${f.name} 항목은 필수입니다.`;
+  }
+  return "";
+}
+
+/** 저장 시 Jira API 오류를 막기 위해 이모지(그림 문자)만 제거. 숫자/콜론 등은 유지(\p{Emoji}는 0-9 포함하므로 사용 안 함) */
+function stripEmoji(str) {
+  if (str == null || typeof str !== "string") {
+    return str;
+  }
+  return str
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function toAdf(text) {
@@ -440,31 +647,33 @@ function toAdf(text) {
 function buildPayload(values) {
   const fields = {
     project: { key: values.projectKey },
-    summary: values.summary,
+    summary: stripEmoji(values.summary),
     issuetype: { name: values.issueType },
   };
 
   if (currentUserId) {
-    fields.assignee = API_VERSION === "3"
+    const userRef = API_VERSION === "3"
       ? { accountId: currentUserId }
       : { name: currentUserId };
+    fields.assignee = userRef;
+    fields.reporter = userRef;
   }
 
   if (values.issueType === "부작업" && values.parentIssueKey) {
     fields.parent = { key: values.parentIssueKey };
   }
 
-  if (values.component) {
-    fields.components = [{ id: values.component }];
-  }
-
   if (values.description) {
+    const desc = stripEmoji(values.description);
     if (API_VERSION === "3") {
-      fields.description = toAdf(values.description);
+      fields.description = toAdf(desc);
     } else {
-      fields.description = values.description;
+      fields.description = desc;
     }
   }
+
+  const extra = getExtraFieldsValues();
+  Object.assign(fields, extra);
 
   return { fields };
 }
@@ -476,9 +685,10 @@ function buildWorklogPayload(values) {
   };
 
   if (values.comment) {
+    const comment = stripEmoji(values.comment);
     payload.comment = API_VERSION === "3"
-      ? toAdf(values.comment)
-      : values.comment;
+      ? toAdf(comment)
+      : comment;
   }
 
   return payload;
@@ -497,6 +707,8 @@ function validate(values) {
   if (!values.summary) {
     return "요약을 입력해주세요.";
   }
+  const extraError = validateExtraFields();
+  if (extraError) return extraError;
   return "";
 }
 
@@ -533,81 +745,16 @@ function updateParentIssueVisibility() {
   elements.parentIssueRow.style.display = isSubTask ? "block" : "none";
 }
 
-function renderComponentOptions(components, selectedId) {
-  const select = elements.component;
-  select.innerHTML = "";
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = "구성요소 선택";
-  select.appendChild(placeholder);
-  components.forEach((component) => {
-    const option = document.createElement("option");
-    option.value = component.id;
-    option.textContent = component.name;
-    select.appendChild(option);
-  });
-  if (selectedId) {
-    select.value = selectedId;
-  }
-}
-
-// 구성요소가 있으면 필드를 표시하고, 없으면 숨긴다.
-function applyComponents(projectKey, components) {
-  // 조회 도중 사용자가 다른 프로젝트 키로 바꿨으면 무시
-  if (loadedComponentsProject !== projectKey) {
-    return;
-  }
-  if (components.length > 0) {
-    renderComponentOptions(components);
-    elements.componentRow.classList.remove("hidden");
-  } else {
-    elements.component.value = "";
-    elements.componentRow.classList.add("hidden");
-  }
-}
-
-async function loadComponents(projectKey) {
-  const key = (projectKey || "").trim().toUpperCase();
-  if (componentsCache[key]) {
-    applyComponents(key, componentsCache[key]);
-    return;
-  }
-  try {
-    const url = `${API_ROOT}/api/${API_VERSION}/project/${encodeURIComponent(key)}/components`;
-    const response = await fetch(url, {
-      method: "GET",
-      credentials: "include",
-      headers: { "Accept": "application/json" },
-    });
-    if (!response.ok) {
-      // 존재하지 않는 키 등은 조용히 숨김 처리
-      applyComponents(key, []);
-      return;
-    }
-    const data = await response.json().catch(() => []);
-    const components = Array.isArray(data) ? data : [];
-    componentsCache[key] = components;
-    applyComponents(key, components);
-  } catch (error) {
-    console.error("구성요소 조회 실패:", error);
-    applyComponents(key, []);
-  }
-}
-
-async function updateComponentVisibility() {
-  const key = elements.projectKey.value.trim().toUpperCase();
-
-  if (!key) {
-    elements.component.value = "";
-    elements.componentRow.classList.add("hidden");
-    loadedComponentsProject = "";
-    return;
-  }
-
-  if (loadedComponentsProject !== key) {
-    loadedComponentsProject = key;
-    await loadComponents(key);
-  }
+/** 프로젝트/이슈타입에 맞는 createmeta 조회 후 동적 필드 렌더 */
+async function loadIssueCreateMetaAndRender() {
+  const projectKey = elements.projectKey?.value?.trim();
+  const issueType = elements.issueType?.value?.trim();
+  issueCreateMetaFields = null;
+  renderIssueExtraFields([]);
+  if (!projectKey || !issueType) return;
+  const fields = await fetchIssueCreateMeta(projectKey, issueType);
+  issueCreateMetaFields = fields;
+  renderIssueExtraFields(fields || []);
 }
 
 async function loadFromStorage() {
@@ -640,7 +787,6 @@ async function loadFromStorage() {
   });
 
   updateParentIssueVisibility();
-  updateComponentVisibility();
 
   WORKLOG_FIELDS.forEach((field) => {
     elements[field].value = result.worklogDraft[field] || "";
@@ -657,6 +803,9 @@ async function loadFromStorage() {
   lastIssueKey = result.lastIssueKey || "";
   setActiveTab(result.activeTab || "issue");
   updateLoadedMeetingsUI();
+  if (result.activeTab === "issue") {
+    await loadIssueCreateMetaAndRender();
+  }
 }
 
 async function saveSettings() {
@@ -665,33 +814,6 @@ async function saveSettings() {
     settings[field] = elements[field].value.trim();
   });
   await storage.set({ settings });
-}
-
-function renderProjectKeyOptions() {
-  elements.projectKeyList.innerHTML = "";
-  projectKeys.forEach((key) => {
-    const option = document.createElement("option");
-    option.value = key;
-    elements.projectKeyList.appendChild(option);
-  });
-}
-
-async function loadProjectKeys() {
-  const result = await storage.get({ projectKeys: DEFAULT_PROJECT_KEYS });
-  const stored = Array.isArray(result.projectKeys) ? result.projectKeys : [];
-  // 기본 키를 항상 포함하고, 저장된 키와 합쳐 중복 제거
-  projectKeys = [...new Set([...DEFAULT_PROJECT_KEYS, ...stored])].filter(Boolean);
-  renderProjectKeyOptions();
-}
-
-async function rememberProjectKey(rawKey) {
-  const key = (rawKey || "").trim().toUpperCase();
-  if (!key || projectKeys.includes(key)) {
-    return;
-  }
-  projectKeys.push(key);
-  renderProjectKeyOptions();
-  await storage.set({ projectKeys });
 }
 
 async function saveDraft() {
@@ -792,7 +914,6 @@ async function handleCreate() {
     elements.summary.value = "";
     elements.description.value = "";
     await saveDraft();
-    await rememberProjectKey(values.projectKey);
 
     if (issueKey) {
       lastIssueKey = issueKey;
@@ -861,8 +982,7 @@ async function handleAddWorklog() {
     lastIssueKey = values.issueKey;
     await storage.set({ lastIssueKey });
 
-    elements.worklogTimeSpent.value = "";
-    elements.worklogComment.value = "";
+    /* 한번에 저장 후에도 불러온 시작 시각·작업 시간·설명은 유지 (재사용 가능) */
     await saveWorklogDraft();
 
     setStatus("Worklog 저장 완료", "success");
@@ -877,15 +997,16 @@ async function handleAddWorklogsFromCalendar() {
     setStatus("이슈 키를 입력해주세요.", "error");
     return;
   }
-  if (!loadedCalendarMeetings.length) {
-    setStatus("캘린더에서 회의를 먼저 불러와주세요.", "error");
+  const toSave = loadedCalendarMeetings.filter((m) => m.selected !== false);
+  if (!toSave.length) {
+    setStatus("저장할 회의를 하나 이상 선택해주세요.", "error");
     return;
   }
 
   setStatus("회의별 Worklog 저장 중...", "loading");
   let successCount = 0;
   let lastError = null;
-  for (const meeting of loadedCalendarMeetings) {
+  for (const meeting of toSave) {
     try {
       await postWorklog(issueKey, {
         started: formatJiraDateTime(meeting.start),
@@ -968,81 +1089,10 @@ function escapeStatusForJql(status) {
   return status.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function getMyIssuesProjectFilter() {
-  return elements.myIssuesProjectFilter?.value?.trim() || "";
-}
-
-const myIssuesProjectOptionsCache = {}; // 상태 텍스트 -> [[key, name], ...]
-
-// 현재 상태 조건으로, 내게 할당된 이슈들의 프로젝트만 추려 드롭다운 옵션을 채운다.
-// (현재 페이지가 아니라 해당 상태의 내 이슈 전체 기준이라, 페이지를 넘겨도 옵션이 줄지 않는다.)
-async function loadMyIssuesProjectOptions() {
-  const statusText = getMyIssuesStatusFilter();
-  let projects = myIssuesProjectOptionsCache[statusText];
-
-  if (!projects) {
-    try {
-      const escaped = escapeStatusForJql(statusText);
-      const params = new URLSearchParams({
-        jql: `assignee = currentUser() AND status = "${escaped}"`,
-        fields: "project",
-        maxResults: "200",
-        startAt: "0",
-      });
-      const url = `${API_ROOT}/api/${API_VERSION}/search?${params.toString()}`;
-      const response = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
-      if (!response.ok) {
-        return;
-      }
-      const data = await response.json().catch(() => ({}));
-      const issues = data.issues || [];
-      const projectMap = new Map();
-      issues.forEach((issue) => {
-        const project = issue.fields?.project;
-        if (project?.key && !projectMap.has(project.key)) {
-          projectMap.set(project.key, project.name || project.key);
-        }
-      });
-      projects = [...projectMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-      myIssuesProjectOptionsCache[statusText] = projects;
-    } catch (error) {
-      console.error("내 이슈 프로젝트 목록 조회 실패:", error);
-      return;
-    }
-  }
-
-  const select = elements.myIssuesProjectFilter;
-  const current = select.value;
-  const keys = projects.map(([key]) => key);
-  select.innerHTML = "";
-  const allOption = document.createElement("option");
-  allOption.value = "";
-  allOption.textContent = "전체";
-  select.appendChild(allOption);
-  projects.forEach(([key, name]) => {
-    const option = document.createElement("option");
-    option.value = key;
-    option.textContent = name && name !== key ? `${key} - ${name}` : key;
-    select.appendChild(option);
-  });
-  // 이전 선택이 현재 상태에서도 유효하면 유지, 아니면 전체로
-  select.value = keys.includes(current) ? current : "";
-
-  elements.myIssuesProjectFilterRow.classList.remove("hidden");
-}
-
 async function fetchMyInProgressIssues(startAt = 0) {
   const statusText = getMyIssuesStatusFilter();
   const escaped = escapeStatusForJql(statusText);
-  let jql = `assignee = currentUser() AND status = "${escaped}"`;
-  const projectKey = getMyIssuesProjectFilter();
-  if (projectKey) {
-    jql += ` AND project = "${escapeStatusForJql(projectKey)}"`;
-  }
+  const jql = `assignee = currentUser() AND status = "${escaped}"`;
   const params = new URLSearchParams({
     jql,
     fields: "summary,status",
@@ -1252,8 +1302,6 @@ async function loadMyIssuesPage(pageIndex) {
 }
 
 async function handleLoadMyInProgressIssues() {
-  // 프로젝트 드롭다운 옵션(내 이슈 전체 프로젝트)을 최초 1회 채운다.
-  await loadMyIssuesProjectOptions();
   await loadMyIssuesPage(0);
 }
 
@@ -1324,7 +1372,10 @@ async function handleLoadMeetings() {
       start: m.start,
       durationMin: m.durationMin,
       title: m.title,
+      timeLabel: m.timeLabel,
+      selected: true,
     }));
+    renderLoadedMeetingsList();
     updateLoadedMeetingsUI();
 
     const rangeMinutes = Math.max(0, Math.round((range.end - range.start) / 60000));
@@ -1358,46 +1409,16 @@ async function handleLoadMeetings() {
   }
 }
 
-function registerEventListeners() {
+document.addEventListener("DOMContentLoaded", async () => {
+  await loadFromStorage();
+  await checkAuthStatus();
+  await checkGoogleAuthStatus();
+
   SETTINGS_FIELDS.forEach((field) => {
     elements[field].addEventListener("input", saveSettings);
     elements[field].addEventListener("change", saveSettings);
     elements[field].addEventListener("blur", saveSettings);
   });
-
-  elements.projectKey.addEventListener("blur", () => {
-    rememberProjectKey(elements.projectKey.value);
-  });
-
-  let componentDebounce;
-  elements.projectKey.addEventListener("input", () => {
-    clearTimeout(componentDebounce);
-    componentDebounce = setTimeout(updateComponentVisibility, 400);
-  });
-  elements.projectKey.addEventListener("change", updateComponentVisibility);
-  elements.projectKey.addEventListener("blur", updateComponentVisibility);
-
-  // datalist는 입력값과 일치하는 옵션만 보여주므로, 값이 채워져 있으면
-  // 전체 목록이 안 열린다. 포커스 시 잠시 비워 전체 목록을 노출하고,
-  // 선택/입력 없이 벗어나면 이전 값을 복원한다.
-  let projectKeyBeforeFocus = "";
-  elements.projectKey.addEventListener("focus", () => {
-    projectKeyBeforeFocus = elements.projectKey.value;
-    if (projectKeyBeforeFocus) {
-      elements.projectKey.value = "";
-    }
-  });
-  elements.projectKey.addEventListener(
-    "blur",
-    () => {
-      // 캡처 단계에서 먼저 실행되어, 복원된 값으로 저장/조회가 이뤄지게 한다.
-      if (!elements.projectKey.value.trim() && projectKeyBeforeFocus) {
-        elements.projectKey.value = projectKeyBeforeFocus;
-      }
-      projectKeyBeforeFocus = "";
-    },
-    true
-  );
 
   DRAFT_FIELDS.forEach((field) => {
     elements[field].addEventListener("input", saveDraft);
@@ -1419,56 +1440,44 @@ function registerEventListeners() {
   elements.create.addEventListener("click", handleCreate);
   elements.useLastIssue.addEventListener("click", handleUseLastIssue);
   elements.clearWorklog.addEventListener("click", handleClearWorklog);
-  elements.addWorklog.addEventListener("click", handleAddWorklog);
-  if (elements.addWorklogsFromCalendar) {
-    elements.addWorklogsFromCalendar.addEventListener("click", handleAddWorklogsFromCalendar);
-  }
+  elements.addWorklog.addEventListener("click", () => {
+    if (worklogMode === "per-meeting") {
+      handleAddWorklogsFromCalendar();
+    } else {
+      handleAddWorklog();
+    }
+  });
   elements.googleLogin.addEventListener("click", handleGoogleLogin);
   elements.loadMeetings.addEventListener("click", handleLoadMeetings);
 
   elements.issueType.addEventListener("change", () => {
     updateParentIssueVisibility();
     saveSettings();
+    loadIssueCreateMetaAndRender();
   });
+  elements.projectKey.addEventListener("change", () => loadIssueCreateMetaAndRender());
+  elements.projectKey.addEventListener("blur", () => loadIssueCreateMetaAndRender());
 
   elements.tabIssue.addEventListener("click", async () => {
     setActiveTab("issue");
     await saveActiveTab("issue");
+    await loadIssueCreateMetaAndRender();
   });
   elements.tabWorklog.addEventListener("click", async () => {
     setActiveTab("worklog");
     await saveActiveTab("worklog");
   });
+  elements.tabWorklogOnce?.addEventListener("click", () => setWorklogMode("once"));
+  elements.tabWorklogPerMeeting?.addEventListener("click", () => setWorklogMode("per-meeting"));
   elements.tabMyIssues.addEventListener("click", async () => {
     setActiveTab("my-issues");
     await saveActiveTab("my-issues");
   });
   elements.loadMyInProgressIssues.addEventListener("click", handleLoadMyInProgressIssues);
-  if (elements.myIssuesProjectFilter) {
-    // 프로젝트를 바꾸면 해당 프로젝트만 Jira에서 다시 조회한다.
-    elements.myIssuesProjectFilter.addEventListener("change", handleLoadMyInProgressIssues);
-  }
   if (elements.myIssuesPrev) {
     elements.myIssuesPrev.addEventListener("click", handleMyIssuesPrev);
   }
   if (elements.myIssuesNext) {
     elements.myIssuesNext.addEventListener("click", handleMyIssuesNext);
   }
-}
-
-document.addEventListener("DOMContentLoaded", async () => {
-  // UI 인터랙션(탭 전환 등)은 네트워크/인증 초기화와 무관하게 항상 동작해야 하므로
-  // 리스너를 먼저 등록한 뒤 비동기 초기화를 진행한다.
-  registerEventListeners();
-
-  try {
-    await loadFromStorage();
-    await loadProjectKeys();
-  } catch (error) {
-    console.error("초기화 중 오류:", error);
-  }
-
-  // 인증 확인은 실패해도 UI 동작에 영향을 주지 않도록 개별적으로 처리한다.
-  checkAuthStatus().catch((error) => console.error("Jira 인증 확인 실패:", error));
-  checkGoogleAuthStatus().catch((error) => console.error("Google 인증 확인 실패:", error));
 });

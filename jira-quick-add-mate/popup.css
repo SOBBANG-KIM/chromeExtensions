@@ -92,19 +92,26 @@ h3 {
   font-size: 14px;
 }
 
-.my-issues-header {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
+.issue-extra-fields {
   margin-bottom: 10px;
 }
 
-.my-issues-header h2 {
-  margin: 0;
+.issue-extra-fields .issue-extra-field {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #42526e;
 }
 
-.my-issues-header #myIssuesStatus {
-  margin: 0;
+.issue-extra-fields .issue-extra-field-label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.issue-extra-fields .issue-extra-field select,
+.issue-extra-fields .issue-extra-field input {
+  width: 100%;
+  margin-top: 0;
 }
 
 label {
@@ -129,25 +136,6 @@ textarea {
 
 textarea {
   resize: vertical;
-}
-
-/* 프로젝트 키 입력칸을 이슈 타입(select)과 동일한 화살표로 통일 */
-#projectKey,
-#issueType,
-#component {
-  -webkit-appearance: none;
-  appearance: none;
-  padding-right: 28px;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%23172b4d' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-}
-
-/* datalist 기본 화살표는 숨기고 커스텀 화살표만 노출 */
-#projectKey::-webkit-calendar-picker-indicator {
-  opacity: 0;
-  cursor: pointer;
 }
 
 .row {
@@ -212,16 +200,6 @@ button:disabled {
   color: #97a0af;
 }
 
-#addWorklogsFromCalendar {
-  background: #000000;
-  color: #ffffff;
-}
-
-#addWorklogsFromCalendar:disabled {
-  background: #97a0af;
-  color: #ffffff;
-}
-
 .status {
   margin-top: 12px;
   min-height: 18px;
@@ -252,6 +230,79 @@ button:disabled {
 
 .calendar-status.error {
   color: #ae2a19;
+}
+
+.worklog-mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+.worklog-mode-tab {
+  flex: 1;
+  background: #e9eef5;
+  color: #42526e;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.worklog-mode-tab:hover {
+  background: #dee4eb;
+}
+
+.worklog-mode-tab.active {
+  background: #ffffff;
+  color: #1d2125;
+  border-color: #c1c7d0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.worklog-mode-panel.hidden {
+  display: none;
+}
+
+.loaded-meetings-list {
+  margin-top: 10px;
+  padding: 8px 0;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.loaded-meetings-list.hidden {
+  display: none;
+}
+
+.loaded-meetings-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #5e6c84;
+}
+
+.loaded-meeting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.loaded-meeting-row input[type="checkbox"] {
+  width: auto;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.loaded-meeting-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .issue-list {
@@ -355,10 +406,6 @@ button:disabled {
 }
 
 .issue-paging {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   margin-top: 10px;
   padding: 8px 0;
   border-top: 1px solid #e9eef5;
@@ -369,32 +416,25 @@ button:disabled {
 }
 
 .issue-page-info {
+  display: block;
   font-size: 11px;
   color: #5e6c84;
-  white-space: nowrap;
+  margin-bottom: 8px;
 }
 
 .issue-paging-buttons {
   display: flex;
   gap: 8px;
-  flex-shrink: 0;
 }
 
 .issue-paging-buttons button {
-  padding: 6px 12px;
+  flex: 1;
+  padding: 6px 8px;
   font-size: 12px;
 }
 
 .issue-filter-row {
   align-items: flex-end;
-}
-
-.issue-filter-row + .issue-filter-row {
-  margin-top: 14px;
-}
-
-#myIssuesProjectFilterRow {
-  margin-top: 12px;
 }
 
 .issue-filter-row .issue-filter-actions {
