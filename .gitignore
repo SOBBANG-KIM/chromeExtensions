@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+
+# 빌드 산출물 (웹스토어 업로드용 패키지)
+*.zip
