@@ -19,6 +19,12 @@ header h1 {
   font-size: 18px;
 }
 
+.app-version {
+  font-size: 11px;
+  font-weight: 400;
+  color: #5e6c84;
+}
+
 .subtext {
   margin: 4px 0 0;
   font-size: 12px;
@@ -68,11 +74,12 @@ header h1 {
   color: #1d2125;
   border-color: #c1c7d0;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  font-weight: 700;
 }
 
 .tab-panel.hidden,
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .divider {
@@ -105,6 +112,46 @@ h3 {
 
 .my-issues-header #myIssuesStatus {
   margin: 0;
+}
+
+.tab-help {
+  position: relative;
+  display: block;
+  margin: 0 0 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-bottom: 1px dotted #97a0af;
+  font-size: 11px;
+  font-family: inherit;
+  color: #5e6c84;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.tab-help-popover {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  margin-top: 6px;
+  padding: 8px 10px;
+  width: 240px;
+  max-width: 70vw;
+  background: #172b4d;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  white-space: pre-line;
+  border-radius: 6px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.tab-help.open .tab-help-popover {
+  display: block;
 }
 
 .issue-extra-fields {
@@ -273,6 +320,11 @@ button:disabled {
   margin-bottom: 0;
 }
 
+.my-issues-mode-tabs {
+  margin-top: 2px;
+  margin-bottom: 10px;
+}
+
 .worklog-mode-tab {
   flex: 1;
   background: #e9eef5;
@@ -293,6 +345,7 @@ button:disabled {
   color: #1d2125;
   border-color: #c1c7d0;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  font-weight: 700;
 }
 
 .worklog-mode-panel.hidden {
@@ -373,6 +426,12 @@ button:disabled {
   text-decoration: underline;
 }
 
+.issue-list-item-subtext {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #5e6c84;
+}
+
 .issue-worklog-toggle {
   flex-shrink: 0;
   padding: 4px 8px;
@@ -408,6 +467,35 @@ button:disabled {
 .issue-worklog-actions {
   margin-top: 10px;
   margin-bottom: 0;
+}
+
+.issue-worklog-history {
+  margin-bottom: 10px;
+}
+
+.issue-worklog-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.issue-worklog-history-list li {
+  padding: 4px 0;
+  border-bottom: 1px solid #f1f2f4;
+  font-size: 11px;
+  color: #42526e;
+}
+
+.issue-worklog-history-list li:last-child {
+  border-bottom: none;
+}
+
+.issue-worklog-history-empty {
+  margin: 0;
+  font-size: 11px;
+  color: #5e6c84;
 }
 
 .issue-worklog-actions button {
@@ -485,4 +573,88 @@ button:disabled {
 
 #myIssuesProjectFilterRow {
   margin-top: 12px;
+}
+
+.month-check-shortfall {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #ae2a19;
+}
+
+.month-check-surplus {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #0052cc;
+}
+
+.month-check-ontarget {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #216e4e;
+}
+
+.month-check-month-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.month-check-week-summary {
+  margin: 2px 0 12px;
+  padding: 2px 4px 2px 8px;
+  background: transparent;
+}
+
+.month-check-week-summary-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #5e6c84;
+}
+
+.month-check-week-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-left: 14px;
+}
+
+.month-check-week-summary-total {
+  font-size: 12px;
+  font-weight: 700;
+  color: #172b4d;
+}
+
+.month-check-week-summary .month-check-shortfall,
+.month-check-week-summary .month-check-surplus,
+.month-check-week-summary .month-check-ontarget,
+.month-check-month-summary .month-check-shortfall,
+.month-check-month-summary .month-check-surplus,
+.month-check-month-summary .month-check-ontarget {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.month-check-week-summary .month-check-shortfall,
+.month-check-month-summary .month-check-shortfall {
+  background: #ffebe6;
+  color: #ae2a19;
+}
+
+.month-check-week-summary .month-check-surplus,
+.month-check-month-summary .month-check-surplus {
+  background: #deebff;
+  color: #0052cc;
+}
+
+.month-check-week-summary .month-check-ontarget,
+.month-check-month-summary .month-check-ontarget {
+  background: #e3fcef;
+  color: #216e4e;
 }

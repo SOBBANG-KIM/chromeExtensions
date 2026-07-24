@@ -6,6 +6,7 @@ const GOOGLE_CLIENT_ID = "114426039511-29s70ph8lbdkr87g4urdqtmt7gdk40qe.apps.goo
 const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_KEY = "googleAuth";
+const DAILY_TARGET_MINUTES = 480; // 평일 목표 worklog 시간(8h)
 
 const elements = {
   projectKey: document.getElementById("projectKey"),
@@ -24,6 +25,8 @@ const elements = {
   componentRow: document.getElementById("componentRow"),
   component: document.getElementById("component"),
   issueExtraFields: document.getElementById("issueExtraFields"),
+  issueWorklogStarted: document.getElementById("issueWorklogStarted"),
+  issueWorklogTimeSpent: document.getElementById("issueWorklogTimeSpent"),
   worklogIssueKey: document.getElementById("worklogIssueKey"),
   worklogStarted: document.getElementById("worklogStarted"),
   worklogTimeSpent: document.getElementById("worklogTimeSpent"),
@@ -44,18 +47,44 @@ const elements = {
   clearWorklog: document.getElementById("clearWorklog"),
   authStatus: document.getElementById("authStatus"),
   status: document.getElementById("status"),
+  appVersion: document.getElementById("appVersion"),
   tabMyIssues: document.getElementById("tab-my-issues"),
   panelMyIssues: document.getElementById("panel-my-issues"),
+  tabMyIssuesList: document.getElementById("tab-my-issues-list"),
+  tabMyIssuesMissing: document.getElementById("tab-my-issues-missing"),
+  tabMyIssuesLongRunning: document.getElementById("tab-my-issues-long-running"),
+  panelMyIssuesList: document.getElementById("panel-my-issues-list"),
+  panelMyIssuesMissing: document.getElementById("panel-my-issues-missing"),
+  panelMyIssuesLongRunning: document.getElementById("panel-my-issues-long-running"),
   loadMyInProgressIssues: document.getElementById("loadMyInProgressIssues"),
   myIssuesStatus: document.getElementById("myIssuesStatus"),
   myIssuesList: document.getElementById("myIssuesList"),
   myIssuesStatusFilter: document.getElementById("myIssuesStatusFilter"),
+  resetMyIssuesStatusFilter: document.getElementById("resetMyIssuesStatusFilter"),
   myIssuesProjectFilter: document.getElementById("myIssuesProjectFilter"),
   myIssuesProjectFilterRow: document.getElementById("myIssuesProjectFilterRow"),
   myIssuesPaging: document.getElementById("myIssuesPaging"),
   myIssuesPageInfo: document.getElementById("myIssuesPageInfo"),
   myIssuesPrev: document.getElementById("myIssuesPrev"),
   myIssuesNext: document.getElementById("myIssuesNext"),
+  missingWorklogMonth: document.getElementById("missingWorklogMonth"),
+  loadMissingWorklog: document.getElementById("loadMissingWorklog"),
+  missingWorklogMsg: document.getElementById("missingWorklogMsg"),
+  missingWorklogList: document.getElementById("missingWorklogList"),
+  missingWorklogProjectFilter: document.getElementById("missingWorklogProjectFilter"),
+  longRunningThreshold: document.getElementById("longRunningThreshold"),
+  longRunningProjectFilterRow: document.getElementById("longRunningProjectFilterRow"),
+  longRunningProjectFilter: document.getElementById("longRunningProjectFilter"),
+  loadLongRunning: document.getElementById("loadLongRunning"),
+  longRunningMsg: document.getElementById("longRunningMsg"),
+  longRunningList: document.getElementById("longRunningList"),
+  tabMonthCheck: document.getElementById("tab-month-check"),
+  panelMonthCheck: document.getElementById("panel-month-check"),
+  monthCheckMonth: document.getElementById("monthCheckMonth"),
+  loadMonthCheck: document.getElementById("loadMonthCheck"),
+  monthCheckStatus: document.getElementById("monthCheckStatus"),
+  monthCheckSummary: document.getElementById("monthCheckSummary"),
+  monthCheckList: document.getElementById("monthCheckList"),
 };
 
 const SETTINGS_FIELDS = ["projectKey", "issueType"];
@@ -67,6 +96,9 @@ let projectKeys = [...DEFAULT_PROJECT_KEYS];
 const componentsCache = {}; // projectKey(대문자) -> 구성요소 배열
 let loadedComponentsProject = "";
 const myIssuesProjectOptionsCache = {}; // 상태 텍스트 -> [[key, name], ...]
+let missingWorklogIssues = []; // 미기록 티켓 마지막 조회 결과(프로젝트 필터용 캐시)
+const LONG_RUNNING_STATUS = "진행 중";
+let longRunningIssues = []; // 장기 진행 티켓 마지막 조회 결과(임계값·프로젝트 필터용 캐시)
 const WORKLOG_FIELDS = [
   "worklogIssueKey",
   "worklogStarted",
@@ -249,9 +281,15 @@ function setGoogleLoginButtonVisible(visible) {
 }
 
 function formatDuration(minutes) {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
+  const DAY_MINUTES = 8 * 60; // Jira 기본 근무 설정(1일 = 8시간) 기준
+  const days = Math.floor(minutes / DAY_MINUTES);
+  const remainder = minutes - days * DAY_MINUTES;
+  const hours = Math.floor(remainder / 60);
+  const mins = remainder % 60;
   const parts = [];
+  if (days) {
+    parts.push(`${days}d`);
+  }
   if (hours) {
     parts.push(`${hours}h`);
   }
@@ -744,6 +782,7 @@ function setActiveTab(tabName) {
   const isIssue = tabName === "issue";
   const isWorklog = tabName === "worklog";
   const isMyIssues = tabName === "my-issues";
+  const isMonthCheck = tabName === "month-check";
 
   elements.tabIssue.classList.toggle("active", isIssue);
   elements.tabIssue.setAttribute("aria-selected", String(isIssue));
@@ -756,6 +795,10 @@ function setActiveTab(tabName) {
   elements.tabMyIssues.classList.toggle("active", isMyIssues);
   elements.tabMyIssues.setAttribute("aria-selected", String(isMyIssues));
   elements.panelMyIssues.classList.toggle("hidden", !isMyIssues);
+
+  elements.tabMonthCheck.classList.toggle("active", isMonthCheck);
+  elements.tabMonthCheck.setAttribute("aria-selected", String(isMonthCheck));
+  elements.panelMonthCheck.classList.toggle("hidden", !isMonthCheck);
 }
 
 function updateParentIssueVisibility() {
@@ -907,6 +950,7 @@ async function loadFromStorage() {
 
   updateParentIssueVisibility();
   updateComponentVisibility();
+  elements.issueWorklogStarted.value = formatLocalInputValue(new Date());
 
   WORKLOG_FIELDS.forEach((field) => {
     elements[field].value = result.worklogDraft[field] || "";
@@ -919,6 +963,8 @@ async function loadFromStorage() {
     elements.calendarDate.value = formatLocalInputValue(new Date()).split("T")[0];
   }
   syncWorklogStartedDate(elements.calendarDate.value);
+  elements.monthCheckMonth.value = formatLocalInputValue(new Date()).slice(0, 7);
+  elements.missingWorklogMonth.value = formatLocalInputValue(new Date()).slice(0, 7);
 
   lastIssueKey = result.lastIssueKey || "";
   setActiveTab(result.activeTab || "issue");
@@ -1035,6 +1081,7 @@ async function handleCreate() {
     elements.description.value = "";
     await saveDraft();
 
+    let worklogNote = "";
     if (issueKey) {
       lastIssueKey = issueKey;
       await storage.set({ lastIssueKey: issueKey });
@@ -1042,10 +1089,25 @@ async function handleCreate() {
         elements.worklogIssueKey.value = issueKey;
         await saveWorklogDraft();
       }
+
+      const inlineTimeSpent = elements.issueWorklogTimeSpent.value.trim();
+      if (inlineTimeSpent) {
+        try {
+          await postWorklog(issueKey, {
+            started: datetimeLocalToJiraStarted(elements.issueWorklogStarted.value),
+            timeSpent: inlineTimeSpent,
+          });
+          worklogNote = " / Worklog 저장 완료";
+        } catch (worklogError) {
+          worklogNote = ` / Worklog 저장 실패: ${normalizeErrorMessage(worklogError)}`;
+        }
+        elements.issueWorklogTimeSpent.value = "";
+        elements.issueWorklogStarted.value = formatLocalInputValue(new Date());
+      }
     }
 
     setStatus(
-      issueKey ? `등록 완료: ${issueKey}` : "등록 완료",
+      issueKey ? `등록 완료: ${issueKey}${worklogNote}` : "등록 완료",
       "success",
       browseUrl
     );
@@ -1173,6 +1235,25 @@ async function handleGoogleLogin() {
 
 const JIRA_BROWSE_BASE = "https://jira.foodtechkorea.com/browse";
 
+/** add my issues 탭 내부 서브탭(내 이슈 목록/미기록 티켓/장기 진행) 전환 */
+function setMyIssuesMode(mode) {
+  const isList = mode === "list";
+  const isMissing = mode === "missing";
+  const isLongRunning = mode === "long-running";
+
+  elements.tabMyIssuesList.classList.toggle("active", isList);
+  elements.tabMyIssuesList.setAttribute("aria-selected", String(isList));
+  elements.panelMyIssuesList.classList.toggle("hidden", !isList);
+
+  elements.tabMyIssuesMissing.classList.toggle("active", isMissing);
+  elements.tabMyIssuesMissing.setAttribute("aria-selected", String(isMissing));
+  elements.panelMyIssuesMissing.classList.toggle("hidden", !isMissing);
+
+  elements.tabMyIssuesLongRunning.classList.toggle("active", isLongRunning);
+  elements.tabMyIssuesLongRunning.setAttribute("aria-selected", String(isLongRunning));
+  elements.panelMyIssuesLongRunning.classList.toggle("hidden", !isLongRunning);
+}
+
 function setMyIssuesStatus(message, type = "") {
   elements.myIssuesStatus.className = `calendar-status ${type}`.trim();
   elements.myIssuesStatus.textContent = message;
@@ -1201,8 +1282,7 @@ async function postWorklog(issueKey, { started, timeSpent, comment }) {
 }
 
 function getMyIssuesStatusFilter() {
-  const value = elements.myIssuesStatusFilter?.value?.trim();
-  return value || "진행 중";
+  return elements.myIssuesStatusFilter?.value?.trim() || "";
 }
 
 function escapeStatusForJql(status) {
@@ -1216,13 +1296,17 @@ function getMyIssuesProjectFilter() {
 // 현재 상태 조건으로, 내게 할당된 이슈들의 프로젝트만 추려 드롭다운 옵션을 채운다.
 async function loadMyIssuesProjectOptions() {
   const statusText = getMyIssuesStatusFilter();
-  let projects = myIssuesProjectOptionsCache[statusText];
+  const cacheKey = statusText || "__all__";
+  let projects = myIssuesProjectOptionsCache[cacheKey];
 
   if (!projects) {
     try {
-      const escaped = escapeStatusForJql(statusText);
+      let jql = "assignee = currentUser()";
+      if (statusText) {
+        jql += ` AND status = "${escapeStatusForJql(statusText)}"`;
+      }
       const params = new URLSearchParams({
-        jql: `assignee = currentUser() AND status = "${escaped}"`,
+        jql,
         fields: "project",
         maxResults: "200",
         startAt: "0",
@@ -1246,7 +1330,7 @@ async function loadMyIssuesProjectOptions() {
         }
       });
       projects = [...projectMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-      myIssuesProjectOptionsCache[statusText] = projects;
+      myIssuesProjectOptionsCache[cacheKey] = projects;
     } catch (error) {
       console.error("내 이슈 프로젝트 목록 조회 실패:", error);
       return;
@@ -1274,8 +1358,10 @@ async function loadMyIssuesProjectOptions() {
 
 async function fetchMyInProgressIssues(startAt = 0) {
   const statusText = getMyIssuesStatusFilter();
-  const escaped = escapeStatusForJql(statusText);
-  let jql = `assignee = currentUser() AND status = "${escaped}"`;
+  let jql = "assignee = currentUser()";
+  if (statusText) {
+    jql += ` AND status = "${escapeStatusForJql(statusText)}"`;
+  }
   const projectKey = getMyIssuesProjectFilter();
   if (projectKey) {
     jql += ` AND project = "${escapeStatusForJql(projectKey)}"`;
@@ -1328,6 +1414,243 @@ function updateMyIssuesPagingUI() {
   }
 }
 
+/** 이슈 키/요약을 받아 접이식 worklog 입력 폼이 달린 <li>를 생성 (내 이슈 목록·미기록 티켓 목록 공용) */
+/** 이슈의 worklog 중 나(currentUserId)의 것만 최신순으로 조회 */
+async function fetchMyWorklogEntriesForIssue(issueKey) {
+  const url = `${API_ROOT}/api/${API_VERSION}/issue/${encodeURIComponent(issueKey)}/worklog`;
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`조회 실패 (${response.status})`);
+  }
+  const data = await response.json().catch(() => ({}));
+  const worklogs = data.worklogs || [];
+  return worklogs
+    .filter((w) => {
+      const author = w.author || {};
+      return currentUserId
+        && (author.accountId === currentUserId || author.name === currentUserId || author.key === currentUserId);
+    })
+    .map((w) => ({
+      started: new Date(w.started),
+      minutes: Math.round((w.timeSpentSeconds || 0) / 60),
+      timeSpent: w.timeSpent || formatDuration(Math.round((w.timeSpentSeconds || 0) / 60)),
+      comment: typeof w.comment === "string" ? w.comment : "",
+    }))
+    .sort((a, b) => b.started - a.started);
+}
+
+/** 이번 달 기준으로 내가 이 이슈에 기록한 worklog 합계(분) */
+async function fetchMyLoggedMinutesThisMonthForIssue(issueKey) {
+  const entries = await fetchMyWorklogEntriesForIssue(issueKey);
+  const range = getMonthRange(formatLocalInputValue(new Date()).slice(0, 7));
+  return entries.reduce((sum, entry) => {
+    if (entry.started >= range.start && entry.started <= range.end) {
+      return sum + entry.minutes;
+    }
+    return sum;
+  }, 0);
+}
+
+function createIssueWorklogListItem(key, summary, { showMonthlyBadge = true, extraLine = "" } = {}) {
+  const href = key ? `${JIRA_BROWSE_BASE}/${key}` : "";
+
+  const li = document.createElement("li");
+  li.className = "issue-list-item";
+  li.dataset.issueKey = key;
+
+  const head = document.createElement("div");
+  head.className = "issue-list-item-head";
+
+  const link = document.createElement("a");
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  link.className = "issue-list-item-link";
+  link.textContent = key ? `${key}: ${summary}` : summary;
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.type = "button";
+  toggleBtn.className = "secondary issue-worklog-toggle";
+  toggleBtn.textContent = "작업로그";
+
+  head.appendChild(link);
+
+  if (showMonthlyBadge) {
+    const monthlyBadge = document.createElement("span");
+    monthlyBadge.className = "month-check-ontarget";
+    monthlyBadge.textContent = "확인 중...";
+    head.appendChild(monthlyBadge);
+
+    fetchMyLoggedMinutesThisMonthForIssue(key)
+      .then((minutes) => {
+        if (minutes > 0) {
+          monthlyBadge.className = "month-check-ontarget";
+          monthlyBadge.textContent = `로그 ${formatDuration(minutes)}`;
+        } else {
+          monthlyBadge.className = "month-check-shortfall";
+          monthlyBadge.textContent = "미기록";
+        }
+      })
+      .catch(() => {
+        monthlyBadge.className = "month-check-shortfall";
+        monthlyBadge.textContent = "확인 실패";
+      });
+  }
+
+  head.appendChild(toggleBtn);
+  li.appendChild(head);
+
+  if (extraLine) {
+    const subtext = document.createElement("p");
+    subtext.className = "issue-list-item-subtext";
+    subtext.textContent = extraLine;
+    li.appendChild(subtext);
+  }
+
+  const formWrap = document.createElement("div");
+  formWrap.className = "issue-worklog-form hidden";
+
+  const historyWrap = document.createElement("div");
+  historyWrap.className = "issue-worklog-history";
+
+  const startedLabel = document.createElement("label");
+  startedLabel.textContent = "시작 시각";
+  const startedInput = document.createElement("input");
+  startedInput.type = "datetime-local";
+  startedInput.className = "issue-worklog-started";
+  startedInput.value = formatLocalInputValue(new Date());
+  startedLabel.appendChild(startedInput);
+
+  const timeSpentLabel = document.createElement("label");
+  timeSpentLabel.textContent = "소요 시간";
+  const timeSpentInput = document.createElement("input");
+  timeSpentInput.type = "text";
+  timeSpentInput.className = "issue-worklog-time";
+  timeSpentInput.placeholder = "1h 30m";
+  timeSpentLabel.appendChild(timeSpentInput);
+
+  const commentLabel = document.createElement("label");
+  commentLabel.textContent = "설명";
+  const commentInput = document.createElement("textarea");
+  commentInput.className = "issue-worklog-comment";
+  commentInput.rows = 2;
+  commentInput.placeholder = "작업 내용";
+  commentLabel.appendChild(commentInput);
+
+  const formActions = document.createElement("div");
+  formActions.className = "actions issue-worklog-actions";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "button";
+  saveBtn.className = "primary";
+  saveBtn.textContent = "저장";
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "secondary";
+  cancelBtn.textContent = "취소";
+  formActions.appendChild(saveBtn);
+  formActions.appendChild(cancelBtn);
+
+  const statusEl = document.createElement("p");
+  statusEl.className = "issue-list-item-status";
+
+  formWrap.appendChild(historyWrap);
+  formWrap.appendChild(startedLabel);
+  formWrap.appendChild(timeSpentLabel);
+  formWrap.appendChild(commentLabel);
+  formWrap.appendChild(formActions);
+  formWrap.appendChild(statusEl);
+  li.appendChild(formWrap);
+
+  async function loadHistory() {
+    historyWrap.innerHTML = "";
+    const loadingEl = document.createElement("p");
+    loadingEl.className = "issue-list-item-status loading";
+    loadingEl.textContent = "작업로그 불러오는 중...";
+    historyWrap.appendChild(loadingEl);
+    try {
+      const entries = await fetchMyWorklogEntriesForIssue(key);
+      historyWrap.innerHTML = "";
+      if (!entries.length) {
+        const emptyEl = document.createElement("p");
+        emptyEl.className = "issue-worklog-history-empty";
+        emptyEl.textContent = "내 작업로그가 없습니다.";
+        historyWrap.appendChild(emptyEl);
+        return;
+      }
+      const list = document.createElement("ul");
+      list.className = "issue-worklog-history-list";
+      entries.forEach((entry) => {
+        const item = document.createElement("li");
+        const dateLabel = formatLocalInputValue(entry.started).replace("T", " ");
+        item.textContent = entry.comment
+          ? `${dateLabel} · ${entry.timeSpent} · ${entry.comment}`
+          : `${dateLabel} · ${entry.timeSpent}`;
+        list.appendChild(item);
+      });
+      historyWrap.appendChild(list);
+    } catch (err) {
+      historyWrap.innerHTML = "";
+      const errorEl = document.createElement("p");
+      errorEl.className = "issue-list-item-status error";
+      errorEl.textContent = normalizeErrorMessage(err) || "작업로그를 불러오지 못했습니다.";
+      historyWrap.appendChild(errorEl);
+    }
+  }
+
+  toggleBtn.addEventListener("click", () => {
+    const isHidden = formWrap.classList.toggle("hidden");
+    if (!isHidden) {
+      startedInput.value = formatLocalInputValue(new Date());
+      statusEl.textContent = "";
+      statusEl.className = "issue-list-item-status";
+      loadHistory();
+    }
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    formWrap.classList.add("hidden");
+    statusEl.textContent = "";
+    statusEl.className = "issue-list-item-status";
+  });
+
+  saveBtn.addEventListener("click", async () => {
+    const timeSpent = timeSpentInput.value.trim();
+    if (!timeSpent) {
+      statusEl.textContent = "소요 시간을 입력하세요.";
+      statusEl.className = "issue-list-item-status error";
+      return;
+    }
+    statusEl.textContent = "저장 중...";
+    statusEl.className = "issue-list-item-status loading";
+    saveBtn.disabled = true;
+    try {
+      await postWorklog(key, {
+        started: datetimeLocalToJiraStarted(startedInput.value),
+        timeSpent,
+        comment: commentInput.value.trim(),
+      });
+      statusEl.textContent = "저장되었습니다.";
+      statusEl.className = "issue-list-item-status success";
+      timeSpentInput.value = "";
+      commentInput.value = "";
+      lastIssueKey = key;
+      await storage.set({ lastIssueKey: key });
+      loadHistory();
+    } catch (err) {
+      statusEl.textContent = normalizeErrorMessage(err) || "저장에 실패했습니다.";
+      statusEl.className = "issue-list-item-status error";
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  return li;
+}
+
 function renderMyIssuesList(issues) {
   elements.myIssuesList.innerHTML = "";
 
@@ -1342,127 +1665,7 @@ function renderMyIssuesList(issues) {
   for (const issue of issues) {
     const key = issue.key || "";
     const summary = issue.fields?.summary || "(제목 없음)";
-    const href = key ? `${JIRA_BROWSE_BASE}/${key}` : "";
-
-    const li = document.createElement("li");
-    li.className = "issue-list-item";
-    li.dataset.issueKey = key;
-
-    const head = document.createElement("div");
-    head.className = "issue-list-item-head";
-
-    const link = document.createElement("a");
-    link.href = href;
-    link.target = "_blank";
-    link.rel = "noreferrer";
-    link.className = "issue-list-item-link";
-    link.textContent = key ? `${key}: ${summary}` : summary;
-
-    const toggleBtn = document.createElement("button");
-    toggleBtn.type = "button";
-    toggleBtn.className = "secondary issue-worklog-toggle";
-    toggleBtn.textContent = "작업로그";
-
-    head.appendChild(link);
-    head.appendChild(toggleBtn);
-    li.appendChild(head);
-
-    const formWrap = document.createElement("div");
-    formWrap.className = "issue-worklog-form hidden";
-
-    const startedLabel = document.createElement("label");
-    startedLabel.textContent = "시작 시각";
-    const startedInput = document.createElement("input");
-    startedInput.type = "datetime-local";
-    startedInput.className = "issue-worklog-started";
-    startedInput.value = formatLocalInputValue(new Date());
-    startedLabel.appendChild(startedInput);
-
-    const timeSpentLabel = document.createElement("label");
-    timeSpentLabel.textContent = "소요 시간";
-    const timeSpentInput = document.createElement("input");
-    timeSpentInput.type = "text";
-    timeSpentInput.className = "issue-worklog-time";
-    timeSpentInput.placeholder = "1h 30m";
-    timeSpentLabel.appendChild(timeSpentInput);
-
-    const commentLabel = document.createElement("label");
-    commentLabel.textContent = "설명";
-    const commentInput = document.createElement("textarea");
-    commentInput.className = "issue-worklog-comment";
-    commentInput.rows = 2;
-    commentInput.placeholder = "작업 내용";
-    commentLabel.appendChild(commentInput);
-
-    const formActions = document.createElement("div");
-    formActions.className = "actions issue-worklog-actions";
-    const saveBtn = document.createElement("button");
-    saveBtn.type = "button";
-    saveBtn.className = "primary";
-    saveBtn.textContent = "저장";
-    const cancelBtn = document.createElement("button");
-    cancelBtn.type = "button";
-    cancelBtn.className = "secondary";
-    cancelBtn.textContent = "취소";
-    formActions.appendChild(saveBtn);
-    formActions.appendChild(cancelBtn);
-
-    const statusEl = document.createElement("p");
-    statusEl.className = "issue-list-item-status";
-
-    formWrap.appendChild(startedLabel);
-    formWrap.appendChild(timeSpentLabel);
-    formWrap.appendChild(commentLabel);
-    formWrap.appendChild(formActions);
-    formWrap.appendChild(statusEl);
-    li.appendChild(formWrap);
-
-    toggleBtn.addEventListener("click", () => {
-      const isHidden = formWrap.classList.toggle("hidden");
-      if (!isHidden) {
-        startedInput.value = formatLocalInputValue(new Date());
-        statusEl.textContent = "";
-        statusEl.className = "issue-list-item-status";
-      }
-    });
-
-    cancelBtn.addEventListener("click", () => {
-      formWrap.classList.add("hidden");
-      statusEl.textContent = "";
-      statusEl.className = "issue-list-item-status";
-    });
-
-    saveBtn.addEventListener("click", async () => {
-      const timeSpent = timeSpentInput.value.trim();
-      if (!timeSpent) {
-        statusEl.textContent = "소요 시간을 입력하세요.";
-        statusEl.className = "issue-list-item-status error";
-        return;
-      }
-      statusEl.textContent = "저장 중...";
-      statusEl.className = "issue-list-item-status loading";
-      saveBtn.disabled = true;
-      try {
-        await postWorklog(key, {
-          started: datetimeLocalToJiraStarted(startedInput.value),
-          timeSpent,
-          comment: commentInput.value.trim(),
-        });
-        statusEl.textContent = "저장되었습니다.";
-        statusEl.className = "issue-list-item-status success";
-        timeSpentInput.value = "";
-        commentInput.value = "";
-        lastIssueKey = key;
-        await storage.set({ lastIssueKey: key });
-      } catch (err) {
-        statusEl.textContent = normalizeErrorMessage(err) || "저장에 실패했습니다.";
-        statusEl.className = "issue-list-item-status error";
-      } finally {
-        saveBtn.disabled = false;
-      }
-    });
-
-    elements.myIssuesList.appendChild(li);
+    elements.myIssuesList.appendChild(createIssueWorklogListItem(key, summary));
   }
 }
 
@@ -1502,6 +1705,624 @@ function handleMyIssuesPrev() {
 function handleMyIssuesNext() {
   if ((myIssuesCurrentPage + 1) * MY_ISSUES_PAGE_SIZE >= myIssuesTotal) return;
   loadMyIssuesPage(myIssuesCurrentPage + 1);
+}
+
+// ── 이번 달 미기록 티켓 ─────────────────────────────
+function setMissingWorklogStatus(message, type = "") {
+  elements.missingWorklogMsg.className = `calendar-status ${type}`.trim();
+  elements.missingWorklogMsg.textContent = message;
+}
+
+/**
+ * 지정 기간 동안 상태가 바뀌었거나(=작업이 있었다고 추정) 새로 생성된 내 담당 이슈 목록 조회 (페이지네이션 포함)
+ * 생성 직후 상태 전환 이력 없이 바로 작업된 티켓도 놓치지 않도록 생성일시 조건을 OR로 추가한다.
+ */
+async function fetchIssuesStatusChangedInRange(start, end) {
+  const startDate = toJqlDate(start);
+  const endDate = toJqlDate(end);
+  // created는 datetime 필드라 "<=" 날짜 리터럴은 그 날 자정으로 해석되므로,
+  // 종료일 전체를 포함하도록 다음 날 자정 미만(<)으로 상한을 잡는다.
+  const endExclusive = new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1);
+  const createdBefore = toJqlDate(endExclusive);
+  const jql = `assignee = currentUser() AND (status changed DURING ("${startDate}","${endDate}") OR (created >= "${startDate}" AND created < "${createdBefore}"))`;
+  const issues = [];
+  const pageSize = 100;
+  let startAt = 0;
+  let total = Infinity;
+  while (startAt < total) {
+    const params = new URLSearchParams({
+      jql,
+      fields: "summary,project",
+      maxResults: String(pageSize),
+      startAt: String(startAt),
+    });
+    const url = `${API_ROOT}/api/${API_VERSION}/search?${params.toString()}`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const msg = data.errorMessages?.join(", ") || `조회 실패 (${response.status})`;
+      throw new Error(msg);
+    }
+    const data = await response.json();
+    const pageIssues = data.issues || [];
+    pageIssues.forEach((issue) => {
+      if (issue.key) {
+        const project = issue.fields?.project || {};
+        issues.push({
+          key: issue.key,
+          summary: issue.fields?.summary || "(제목 없음)",
+          projectKey: project.key || "",
+          projectName: project.name || project.key || "",
+        });
+      }
+    });
+    total = data.total ?? pageIssues.length;
+    startAt += pageIssues.length;
+    if (!pageIssues.length) break;
+  }
+  return issues;
+}
+
+function renderMissingWorklogList(listEl, issues) {
+  listEl.innerHTML = "";
+  if (!issues.length) {
+    const li = document.createElement("li");
+    li.className = "issue-list-empty";
+    li.textContent = "모두 worklog가 기록되어 있습니다.";
+    listEl.appendChild(li);
+    return;
+  }
+  issues.forEach(({ key, summary }) => {
+    listEl.appendChild(createIssueWorklogListItem(key, summary, { showMonthlyBadge: false }));
+  });
+}
+
+/** 미기록 티켓이 속한 프로젝트만 추려 드롭다운 옵션을 채운다 */
+function renderMissingWorklogProjectOptions(issues) {
+  const projectMap = new Map();
+  issues.forEach((issue) => {
+    if (issue.projectKey && !projectMap.has(issue.projectKey)) {
+      projectMap.set(issue.projectKey, issue.projectName || issue.projectKey);
+    }
+  });
+  const projects = [...projectMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  const select = elements.missingWorklogProjectFilter;
+  const current = select.value;
+  const keys = projects.map(([key]) => key);
+  select.innerHTML = "";
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = "전체";
+  select.appendChild(allOption);
+  projects.forEach(([key, name]) => {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = name && name !== key ? `${key} - ${name}` : key;
+    select.appendChild(option);
+  });
+  select.value = keys.includes(current) ? current : "";
+}
+
+/** 선택된 프로젝트로 캐시된 미기록 티켓 목록을 다시 렌더링 (재조회 없이 클라이언트에서 필터링) */
+function applyMissingWorklogProjectFilter() {
+  const projectKey = elements.missingWorklogProjectFilter.value.trim();
+  const filtered = projectKey
+    ? missingWorklogIssues.filter((issue) => issue.projectKey === projectKey)
+    : missingWorklogIssues;
+  renderMissingWorklogList(elements.missingWorklogList, filtered);
+}
+
+async function handleLoadMissingWorklog() {
+  const monthValue = elements.missingWorklogMonth.value || formatLocalInputValue(new Date()).slice(0, 7);
+  const range = getMonthRange(monthValue);
+  if (!range) {
+    setMissingWorklogStatus("대상 월을 선택해주세요.", "error");
+    return;
+  }
+
+  const now = new Date();
+  const cappedEnd = range.end > now ? now : range.end;
+  if (cappedEnd < range.start) {
+    setMissingWorklogStatus("미래 월은 조회할 수 없습니다.", "error");
+    elements.missingWorklogList.innerHTML = "";
+    return;
+  }
+
+  setMissingWorklogStatus("확인 중...", "loading");
+  elements.missingWorklogList.innerHTML = "";
+
+  try {
+    const [loggedIssueKeys, changedIssues] = await Promise.all([
+      fetchIssueKeysWithWorklogInRange(range.start, cappedEnd),
+      fetchIssuesStatusChangedInRange(range.start, cappedEnd),
+    ]);
+    const loggedKeySet = new Set(loggedIssueKeys);
+    missingWorklogIssues = changedIssues.filter((issue) => !loggedKeySet.has(issue.key));
+    renderMissingWorklogProjectOptions(missingWorklogIssues);
+    applyMissingWorklogProjectFilter();
+    setMissingWorklogStatus("", "");
+  } catch (error) {
+    const message = normalizeErrorMessage(error);
+    setMissingWorklogStatus(message ? `확인 실패: ${message}` : "확인에 실패했습니다.", "error");
+  }
+}
+
+// ── 장기 진행 티켓 ─────────────────────────────
+function setLongRunningStatus(message, type = "") {
+  elements.longRunningMsg.className = `calendar-status ${type}`.trim();
+  elements.longRunningMsg.textContent = message;
+}
+
+/** 특정 상태에 있는 내 담당 이슈 목록 조회 (페이지네이션 포함) */
+async function fetchInProgressIssueList(statusName) {
+  const jql = `assignee = currentUser() AND status = "${escapeStatusForJql(statusName)}"`;
+  const issues = [];
+  const pageSize = 100;
+  let startAt = 0;
+  let total = Infinity;
+  while (startAt < total) {
+    const params = new URLSearchParams({
+      jql,
+      fields: "summary,project",
+      maxResults: String(pageSize),
+      startAt: String(startAt),
+    });
+    const url = `${API_ROOT}/api/${API_VERSION}/search?${params.toString()}`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const msg = data.errorMessages?.join(", ") || `조회 실패 (${response.status})`;
+      throw new Error(msg);
+    }
+    const data = await response.json();
+    const pageIssues = data.issues || [];
+    pageIssues.forEach((issue) => {
+      if (issue.key) {
+        const project = issue.fields?.project || {};
+        issues.push({
+          key: issue.key,
+          summary: issue.fields?.summary || "(제목 없음)",
+          projectKey: project.key || "",
+          projectName: project.name || project.key || "",
+        });
+      }
+    });
+    total = data.total ?? pageIssues.length;
+    startAt += pageIssues.length;
+    if (!pageIssues.length) break;
+  }
+  return issues;
+}
+
+/** 이슈 changelog에서 특정 상태로 전환된 가장 최근 시각을 조회 (없으면 이슈 생성일로 폴백) */
+async function fetchStatusEnteredDate(issueKey, statusName) {
+  const url = `${API_ROOT}/api/${API_VERSION}/issue/${encodeURIComponent(issueKey)}?fields=created&expand=changelog`;
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    return null;
+  }
+  const data = await response.json().catch(() => null);
+  if (!data) {
+    return null;
+  }
+  const histories = data.changelog?.histories || [];
+  let enteredAt = null;
+  for (const history of histories) {
+    for (const item of history.items || []) {
+      if (item.field === "status" && item.toString === statusName) {
+        enteredAt = new Date(history.created);
+      }
+    }
+  }
+  if (enteredAt) {
+    return enteredAt;
+  }
+  return data.fields?.created ? new Date(data.fields.created) : null;
+}
+
+/** 상태 진입일 기준 경과 영업일까지 계산한 전체 진행중 이슈 목록(임계값 적용 전) */
+async function fetchLongRunningIssues(statusName) {
+  const issues = await fetchInProgressIssueList(statusName);
+  const today = new Date();
+  const results = await Promise.all(
+    issues.map(async ({ key, summary, projectKey, projectName }) => {
+      const enteredAt = await fetchStatusEnteredDate(key, statusName);
+      if (!enteredAt) {
+        return null;
+      }
+      const elapsedDays = buildWeekdayList(enteredAt, today).length;
+      return { key, summary, projectKey, projectName, enteredAt, elapsedDays };
+    })
+  );
+  return results.filter(Boolean).sort((a, b) => b.elapsedDays - a.elapsedDays);
+}
+
+/** 조회된 진행중 이슈가 속한 프로젝트만 추려 드롭다운 옵션을 채운다 */
+function renderLongRunningProjectOptions(issues) {
+  const projectMap = new Map();
+  issues.forEach((issue) => {
+    if (issue.projectKey && !projectMap.has(issue.projectKey)) {
+      projectMap.set(issue.projectKey, issue.projectName || issue.projectKey);
+    }
+  });
+  const projects = [...projectMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  const select = elements.longRunningProjectFilter;
+  const current = select.value;
+  const keys = projects.map(([key]) => key);
+  select.innerHTML = "";
+  const allOption = document.createElement("option");
+  allOption.value = "";
+  allOption.textContent = "전체";
+  select.appendChild(allOption);
+  projects.forEach(([key, name]) => {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = name && name !== key ? `${key} - ${name}` : key;
+    select.appendChild(option);
+  });
+  select.value = keys.includes(current) ? current : "";
+}
+
+/** 캐시된 전체 진행중 이슈에 임계 영업일/프로젝트 필터를 적용해 다시 렌더링 (재조회 없이) */
+function applyLongRunningFilters() {
+  const threshold = Number(elements.longRunningThreshold.value) || 5;
+  const projectKey = elements.longRunningProjectFilter.value.trim();
+  const filtered = longRunningIssues.filter((issue) => {
+    if (issue.elapsedDays < threshold) return false;
+    if (projectKey && issue.projectKey !== projectKey) return false;
+    return true;
+  });
+  renderLongRunningList(filtered);
+}
+
+function renderLongRunningList(items) {
+  const listEl = elements.longRunningList;
+  listEl.innerHTML = "";
+  if (!items.length) {
+    const li = document.createElement("li");
+    li.className = "issue-list-empty";
+    li.textContent = "기준을 넘는 장기 진행 티켓이 없습니다.";
+    listEl.appendChild(li);
+    return;
+  }
+  items.forEach(({ key, summary, enteredAt }) => {
+    const dateLabel = formatLocalInputValue(enteredAt).replace("T", " ");
+    listEl.appendChild(createIssueWorklogListItem(key, summary, { extraLine: `마지막 상태 변경일시: ${dateLabel}` }));
+  });
+}
+
+async function handleLoadLongRunning() {
+  setLongRunningStatus("확인 중...", "loading");
+  elements.longRunningList.innerHTML = "";
+
+  try {
+    longRunningIssues = await fetchLongRunningIssues(LONG_RUNNING_STATUS);
+    renderLongRunningProjectOptions(longRunningIssues);
+    applyLongRunningFilters();
+    setLongRunningStatus("", "");
+  } catch (error) {
+    const message = normalizeErrorMessage(error);
+    setLongRunningStatus(message ? `확인 실패: ${message}` : "확인에 실패했습니다.", "error");
+  }
+}
+
+// ── 월 Worklog 부족일 체크 ─────────────────────────────
+const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function setMonthCheckStatus(message, type = "") {
+  elements.monthCheckStatus.className = `calendar-status ${type}`.trim();
+  elements.monthCheckStatus.textContent = message;
+}
+
+function toJqlDate(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function getMonthRange(monthValue) {
+  const [year, month] = (monthValue || "").split("-").map(Number);
+  if (!year || !month) {
+    return null;
+  }
+  const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+  return { start, end };
+}
+
+function buildWeekdayList(start, end) {
+  const days = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cursor <= last) {
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) {
+      days.push(new Date(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+}
+
+/** 해당 날짜가 속한 주(월요일)의 날짜를 반환 */
+function getWeekStart(date) {
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + diff);
+}
+
+/** worklogAuthor/worklogDate JQL로 이번 기간에 내 worklog가 있는 이슈 키 목록 조회 (페이지네이션 포함) */
+async function fetchIssueKeysWithWorklogInRange(start, end) {
+  const jql = `worklogAuthor = currentUser() AND worklogDate >= "${toJqlDate(start)}" AND worklogDate <= "${toJqlDate(end)}"`;
+  const keys = [];
+  const pageSize = 100;
+  let startAt = 0;
+  let total = Infinity;
+  while (startAt < total) {
+    const params = new URLSearchParams({
+      jql,
+      fields: "key",
+      maxResults: String(pageSize),
+      startAt: String(startAt),
+    });
+    const url = `${API_ROOT}/api/${API_VERSION}/search?${params.toString()}`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      const msg = data.errorMessages?.join(", ") || `조회 실패 (${response.status})`;
+      throw new Error(msg);
+    }
+    const data = await response.json();
+    const issues = data.issues || [];
+    issues.forEach((issue) => {
+      if (issue.key) keys.push(issue.key);
+    });
+    total = data.total ?? issues.length;
+    startAt += issues.length;
+    if (!issues.length) break;
+  }
+  return keys;
+}
+
+/** 이슈 하나의 worklog 중 나(currentUserId)의 것만, 지정 기간 내 항목만 추려 { date, minutes } 배열로 반환 */
+async function fetchIssueWorklogEntries(issueKey, start, end) {
+  const entries = [];
+  const pageSize = 1000;
+  let startAt = 0;
+  let total = Infinity;
+  while (startAt < total) {
+    const params = new URLSearchParams({
+      startAt: String(startAt),
+      maxResults: String(pageSize),
+    });
+    const url = `${API_ROOT}/api/${API_VERSION}/issue/${encodeURIComponent(issueKey)}/worklog?${params.toString()}`;
+    const response = await fetch(url, {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      return entries;
+    }
+    const data = await response.json().catch(() => ({}));
+    const worklogs = data.worklogs || [];
+    for (const w of worklogs) {
+      const author = w.author || {};
+      const isMine = currentUserId
+        && (author.accountId === currentUserId || author.name === currentUserId || author.key === currentUserId);
+      if (!isMine || !w.started) continue;
+      const started = new Date(w.started);
+      if (Number.isNaN(started.getTime()) || started < start || started > end) continue;
+      entries.push({
+        date: toJqlDate(started),
+        minutes: Math.round((w.timeSpentSeconds || 0) / 60),
+      });
+    }
+    total = data.total ?? worklogs.length;
+    startAt += worklogs.length;
+    if (!worklogs.length) break;
+  }
+  return entries;
+}
+
+async function aggregateDailyMinutes(start, end, issueKeys) {
+  const results = await Promise.all(
+    issueKeys.map((key) => fetchIssueWorklogEntries(key, start, end))
+  );
+  const dailyMinutes = new Map();
+  for (const entries of results) {
+    for (const entry of entries) {
+      dailyMinutes.set(entry.date, (dailyMinutes.get(entry.date) || 0) + entry.minutes);
+    }
+  }
+  return dailyMinutes;
+}
+
+/** 부족일 "채우기" 클릭: add worklog 탭으로 이동 + 날짜/부족 시간 프리필 */
+function handleFillShortfall(date, shortfallMinutes) {
+  const pad = (value) => String(value).padStart(2, "0");
+  const dateText = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  setWorklogMode("once");
+  elements.worklogStarted.value = `${dateText}T09:00`;
+  elements.worklogTimeSpent.value = formatDuration(shortfallMinutes);
+  setActiveTab("worklog");
+  saveActiveTab("worklog");
+  saveWorklogDraft();
+}
+
+/** 부족(음수)/초과(양수)/충족(0) 상태 뱃지 생성. 조상 요소에 .month-check-week-summary 또는 .month-check-month-summary가 있으면 pill 스타일로 렌더링됨 */
+function createDiffLabel(diffMinutes) {
+  const el = document.createElement("span");
+  if (diffMinutes < 0) {
+    el.className = "month-check-shortfall";
+    el.textContent = `부족 ${formatDuration(-diffMinutes)}`;
+  } else if (diffMinutes > 0) {
+    el.className = "month-check-surplus";
+    el.textContent = `초과 ${formatDuration(diffMinutes)}`;
+  } else {
+    el.className = "month-check-ontarget";
+    el.textContent = "충족";
+  }
+  return el;
+}
+
+function renderMonthCheckResult(dailyMinutesMap, weekdays) {
+  const listEl = elements.monthCheckList;
+  listEl.innerHTML = "";
+
+  let totalLogged = 0;
+  const dayEntries = weekdays.map((date) => {
+    const dateText = toJqlDate(date);
+    const minutes = dailyMinutesMap.get(dateText) || 0;
+    totalLogged += minutes;
+    return { date, minutes, diff: minutes - DAILY_TARGET_MINUTES };
+  });
+
+  const targetTotal = weekdays.length * DAILY_TARGET_MINUTES;
+  elements.monthCheckSummary.innerHTML = "";
+  if (weekdays.length) {
+    const totalLabel = document.createElement("span");
+    totalLabel.textContent = `로그 ${formatDuration(totalLogged)} / 목표 ${formatDuration(targetTotal)}`;
+    elements.monthCheckSummary.appendChild(totalLabel);
+    elements.monthCheckSummary.appendChild(createDiffLabel(totalLogged - targetTotal));
+  }
+
+  if (!dayEntries.length) {
+    const li = document.createElement("li");
+    li.className = "issue-list-empty";
+    li.textContent = "조회할 평일이 없습니다.";
+    listEl.appendChild(li);
+    return;
+  }
+
+  let weekLogged = 0;
+  let weekTarget = 0;
+  let weekKey = "";
+  let weekStartDate = null;
+  let weekEndDate = null;
+
+  dayEntries.forEach(({ date, minutes, diff }, index) => {
+    const currentWeekKey = toJqlDate(getWeekStart(date));
+    if (weekKey && currentWeekKey !== weekKey) {
+      appendWeekSummaryRow(listEl, weekStartDate, weekEndDate, weekLogged, weekTarget);
+      weekLogged = 0;
+      weekTarget = 0;
+      weekStartDate = null;
+    }
+    weekKey = currentWeekKey;
+    if (!weekStartDate) {
+      weekStartDate = date;
+    }
+    weekEndDate = date;
+    weekLogged += minutes;
+    weekTarget += DAILY_TARGET_MINUTES;
+
+    const li = document.createElement("li");
+    li.className = "issue-list-item";
+
+    const head = document.createElement("div");
+    head.className = "issue-list-item-head";
+
+    const label = document.createElement("span");
+    label.className = "issue-list-item-link";
+    const weekdayLabel = WEEKDAY_LABELS[date.getDay()];
+    label.textContent = `${date.getMonth() + 1}/${date.getDate()}(${weekdayLabel}) 로그 ${formatDuration(minutes)}`;
+
+    head.appendChild(label);
+    head.appendChild(createDiffLabel(diff));
+
+    if (diff < 0) {
+      const fillBtn = document.createElement("button");
+      fillBtn.type = "button";
+      fillBtn.className = "secondary issue-worklog-toggle";
+      fillBtn.textContent = "채우기";
+      fillBtn.addEventListener("click", () => handleFillShortfall(date, -diff));
+      head.appendChild(fillBtn);
+    }
+
+    li.appendChild(head);
+    listEl.appendChild(li);
+
+    if (index === dayEntries.length - 1) {
+      appendWeekSummaryRow(listEl, weekStartDate, weekEndDate, weekLogged, weekTarget);
+    }
+  });
+}
+
+/** 주(월~금) 단위 누적 로그/목표를 들여쓴 하위 항목으로 목록 중간에 삽입 */
+function appendWeekSummaryRow(listEl, startDate, endDate, loggedMinutes, targetMinutes) {
+  const li = document.createElement("li");
+  li.className = "month-check-week-summary";
+
+  const label = document.createElement("span");
+  label.className = "month-check-week-summary-label";
+  const rangeText = startDate && endDate
+    ? `${startDate.getMonth() + 1}/${startDate.getDate()} ~ ${endDate.getMonth() + 1}/${endDate.getDate()} 주간 합계`
+    : "주간 합계";
+  label.textContent = `ㄴ ${rangeText}`;
+
+  const row = document.createElement("div");
+  row.className = "month-check-week-summary-row";
+
+  const total = document.createElement("span");
+  total.className = "month-check-week-summary-total";
+  total.textContent = `로그 ${formatDuration(loggedMinutes)} / 목표 ${formatDuration(targetMinutes)}`;
+
+  row.appendChild(total);
+  row.appendChild(createDiffLabel(loggedMinutes - targetMinutes));
+  li.appendChild(label);
+  li.appendChild(row);
+  listEl.appendChild(li);
+}
+
+async function handleLoadMonthCheck() {
+  const monthValue = elements.monthCheckMonth.value || formatLocalInputValue(new Date()).slice(0, 7);
+  const range = getMonthRange(monthValue);
+  if (!range) {
+    setMonthCheckStatus("대상 월을 선택해주세요.", "error");
+    return;
+  }
+
+  const now = new Date();
+  const cappedEnd = range.end > now ? now : range.end;
+  if (cappedEnd < range.start) {
+    setMonthCheckStatus("미래 월은 조회할 수 없습니다.", "error");
+    elements.monthCheckSummary.textContent = "";
+    elements.monthCheckList.innerHTML = "";
+    return;
+  }
+
+  setMonthCheckStatus("조회 중...", "loading");
+  elements.monthCheckSummary.textContent = "";
+  elements.monthCheckList.innerHTML = "";
+
+  try {
+    const issueKeys = await fetchIssueKeysWithWorklogInRange(range.start, cappedEnd);
+    const dailyMinutesMap = await aggregateDailyMinutes(range.start, cappedEnd, issueKeys);
+    const weekdays = buildWeekdayList(range.start, cappedEnd);
+    renderMonthCheckResult(dailyMinutesMap, weekdays);
+    setMonthCheckStatus("", "");
+  } catch (error) {
+    const message = normalizeErrorMessage(error);
+    setMonthCheckStatus(message ? `조회 실패: ${message}` : "조회에 실패했습니다.", "error");
+  }
 }
 
 async function handleLoadMeetings() {
@@ -1598,6 +2419,24 @@ async function handleLoadMeetings() {
   }
 }
 
+/** 클릭 시 여닫히는 "ⓘ 조회 조건" 툴팁. 다른 곳 클릭하거나 다시 클릭하면 닫힘 */
+function setupTabHelpTooltips() {
+  const helpButtons = document.querySelectorAll(".tab-help");
+  helpButtons.forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const wasOpen = btn.classList.contains("open");
+      helpButtons.forEach((other) => other.classList.remove("open"));
+      if (!wasOpen) {
+        btn.classList.add("open");
+      }
+    });
+  });
+  document.addEventListener("click", () => {
+    helpButtons.forEach((btn) => btn.classList.remove("open"));
+  });
+}
+
 function registerEventListeners() {
   SETTINGS_FIELDS.forEach((field) => {
     elements[field].addEventListener("input", saveSettings);
@@ -1690,7 +2529,13 @@ function registerEventListeners() {
     setActiveTab("my-issues");
     await saveActiveTab("my-issues");
   });
+  elements.tabMyIssuesList.addEventListener("click", () => setMyIssuesMode("list"));
+  elements.tabMyIssuesMissing.addEventListener("click", () => setMyIssuesMode("missing"));
+  elements.tabMyIssuesLongRunning.addEventListener("click", () => setMyIssuesMode("long-running"));
   elements.loadMyInProgressIssues.addEventListener("click", handleLoadMyInProgressIssues);
+  elements.resetMyIssuesStatusFilter.addEventListener("click", () => {
+    elements.myIssuesStatusFilter.value = "";
+  });
   if (elements.myIssuesProjectFilter) {
     // 프로젝트를 바꾸면 해당 프로젝트만 Jira에서 다시 조회한다.
     elements.myIssuesProjectFilter.addEventListener("change", handleLoadMyInProgressIssues);
@@ -1701,12 +2546,29 @@ function registerEventListeners() {
   if (elements.myIssuesNext) {
     elements.myIssuesNext.addEventListener("click", handleMyIssuesNext);
   }
+  elements.loadMissingWorklog.addEventListener("click", handleLoadMissingWorklog);
+  elements.missingWorklogMonth.addEventListener("change", handleLoadMissingWorklog);
+  elements.missingWorklogProjectFilter.addEventListener("change", applyMissingWorklogProjectFilter);
+  elements.loadLongRunning.addEventListener("click", handleLoadLongRunning);
+  elements.longRunningProjectFilter.addEventListener("change", applyLongRunningFilters);
+  elements.longRunningThreshold.addEventListener("change", applyLongRunningFilters);
+
+  elements.tabMonthCheck.addEventListener("click", async () => {
+    setActiveTab("month-check");
+    await saveActiveTab("month-check");
+  });
+  elements.loadMonthCheck.addEventListener("click", handleLoadMonthCheck);
+  elements.monthCheckMonth.addEventListener("change", handleLoadMonthCheck);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
   // UI 인터랙션(탭 전환 등)은 네트워크/인증 초기화와 무관하게 항상 동작해야 하므로
   // 리스너를 먼저 등록한 뒤 비동기 초기화를 진행한다.
   registerEventListeners();
+  setupTabHelpTooltips();
+
+  // manifest.json의 version을 그대로 표시 (게시 시 manifest 버전만 올리면 자동 반영됨)
+  elements.appVersion.textContent = `v${chrome.runtime.getManifest().version}`;
 
   try {
     await loadFromStorage();

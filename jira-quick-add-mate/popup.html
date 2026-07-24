@@ -9,7 +9,7 @@
   <body>
     <div class="container">
       <header>
-        <h1>Jira Worklog Quick Add</h1>
+        <h1>Jira Worklog Quick Add <span id="appVersion" class="app-version"></span></h1>
         <p id="authStatus" class="auth-status"></p>
       </header>
 
@@ -43,6 +43,16 @@
           aria-controls="panel-my-issues"
         >
           add my issues
+        </button>
+        <button
+          id="tab-month-check"
+          class="tab"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-month-check"
+        >
+          월 현황 worklog
         </button>
       </nav>
 
@@ -99,6 +109,18 @@
               placeholder="상세 내용을 입력하세요"
             ></textarea>
           </label>
+          <div class="divider"></div>
+          <h3>Worklog (선택)</h3>
+          <div class="row">
+            <label class="grow" style="max-width: 230px;">
+              시작 시각
+              <input id="issueWorklogStarted" type="datetime-local" />
+            </label>
+            <label class="grow wide">
+              작업 시간
+              <input id="issueWorklogTimeSpent" type="text" placeholder="1h 30m" />
+            </label>
+          </div>
         </section>
 
         <section class="actions">
@@ -197,33 +219,138 @@
         aria-labelledby="tab-my-issues"
       >
         <section class="card">
-          <div class="my-issues-header">
-            <h2>내 이슈 목록</h2>
-            <span id="myIssuesStatus" class="calendar-status"></span>
+          <nav class="worklog-mode-tabs my-issues-mode-tabs" role="tablist" aria-label="내 이슈 보기">
+            <button id="tab-my-issues-list" class="worklog-mode-tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-my-issues-list">
+              내 이슈 목록
+            </button>
+            <button id="tab-my-issues-missing" class="worklog-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-my-issues-missing">
+              미기록 티켓
+            </button>
+            <button id="tab-my-issues-long-running" class="worklog-mode-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-my-issues-long-running">
+              장기 진행
+            </button>
+          </nav>
+
+          <div id="panel-my-issues-list" class="worklog-mode-panel" role="tabpanel" aria-labelledby="tab-my-issues-list">
+            <button type="button" class="tab-help">
+              ⓘ 조회 조건
+              <span class="tab-help-popover">담당자가 나인 이슈를 상태·프로젝트로 필터링해서 보여줍니다.
+· 상태를 비우면 모든 상태를 조회합니다.
+· 각 티켓 옆에는 이번 달 내가 남긴 worklog 시간(로그 Xh) 또는 미기록 여부가 함께 표시됩니다.</span>
+            </button>
+            <div class="my-issues-header">
+              <span id="myIssuesStatus" class="calendar-status"></span>
+            </div>
+            <div class="row issue-filter-row">
+              <div style="width: 60px; margin-bottom: 8px;">상태: </div>
+              <input id="myIssuesStatusFilter" type="text" placeholder="전체 (비우면 모든 상태)" value="진행 중" list="myIssuesStatusList" autocomplete="off" style="margin-top: 0;"/>
+              <datalist id="myIssuesStatusList">
+                <option value="BACKLOG"></option>
+                <option value="할 일"></option>
+                <option value="진행 중"></option>
+                <option value="개발 완료"></option>
+                <option value="IN REVIEW"></option>
+                <option value="완료"></option>
+              </datalist>
+              <div class="actions issue-filter-actions">
+                <button id="loadMyInProgressIssues" class="primary" type="button">
+                  조회
+                </button>
+                <button id="resetMyIssuesStatusFilter" class="secondary" type="button">
+                  초기화
+                </button>
+              </div>
+            </div>
+            <div id="myIssuesPaging" class="issue-paging hidden">
+              <span id="myIssuesPageInfo" class="issue-page-info"></span>
+              <div class="issue-paging-buttons">
+                <button id="myIssuesPrev" class="secondary" type="button">이전</button>
+                <button id="myIssuesNext" class="secondary" type="button">다음</button>
+              </div>
+            </div>
+            <div id="myIssuesProjectFilterRow" class="row issue-filter-row hidden">
+              <div style="width: 60px; margin-bottom: 8px;">프로젝트: </div>
+              <select id="myIssuesProjectFilter" style="margin-top: 0;">
+                <option value="">전체</option>
+              </select>
+            </div>
+            <ul id="myIssuesList" class="issue-list" aria-live="polite"></ul>
           </div>
+
+          <div id="panel-my-issues-missing" class="worklog-mode-panel hidden" role="tabpanel" aria-labelledby="tab-my-issues-missing">
+            <button type="button" class="tab-help">
+              ⓘ 조회 조건
+              <span class="tab-help-popover">선택한 달 동안 상태가 바뀌었거나 새로 생성된 내 담당 이슈 중, 그 기간에 내가 남긴 worklog가 하나도 없는 것만 보여줍니다.
+· 다른 달에 이미 남긴 worklog는 이 기간 판정에 포함되지 않습니다.</span>
+            </button>
+            <div class="row issue-filter-row">
+              <label class="grow" style="margin-bottom: 0;">
+                <input id="missingWorklogMonth" type="month" />
+              </label>
+            </div>
+            <div class="row issue-filter-row">
+              <div id="missingWorklogProjectFilterRow" class="row grow" style="margin-bottom: 0;">
+                <div style="width: 60px; padding-top: 8px;">프로젝트: </div>
+                <select id="missingWorklogProjectFilter" class="grow" style="margin-top: 0;">
+                  <option value="">전체</option>
+                </select>
+              </div>
+              <div class="actions issue-filter-actions">
+                <button id="loadMissingWorklog" class="primary" type="button">조회</button>
+              </div>
+            </div>
+            <p id="missingWorklogMsg" class="calendar-status"></p>
+            <ul id="missingWorklogList" class="issue-list" aria-live="polite"></ul>
+          </div>
+
+          <div id="panel-my-issues-long-running" class="worklog-mode-panel hidden" role="tabpanel" aria-labelledby="tab-my-issues-long-running">
+            <button type="button" class="tab-help">
+              ⓘ 조회 조건
+              <span class="tab-help-popover">현재 '진행 중' 상태인 내 담당 이슈 중, 가장 최근 '진행 중' 전환일로부터 오늘까지 마지막 상태 변경일이 기준 이상인 것만 보여줍니다.
+· worklog 여부와는 무관하게 상태 체류 기간만 봅니다.</span>
+            </button>
+            <div class="row issue-filter-row">
+              <div id="longRunningProjectFilterRow" class="row grow" style="margin-bottom: 0;">
+                <div style="width: 60px; padding-top: 8px;">프로젝트: </div>
+                <select id="longRunningProjectFilter" class="grow" style="margin-top: 0;">
+                  <option value="">전체</option>
+                </select>
+              </div>
+              <div class="actions issue-filter-actions">
+                <button id="loadLongRunning" class="primary" type="button">조회</button>
+              </div>
+            </div>
+            <div class="row issue-filter-row">
+              <div style="width: 60px; margin-bottom: 8px; white-space: nowrap;">상태 변경일: </div>
+              <input id="longRunningThreshold" type="number" min="1" value="5" class="grow" style="margin-top: 0;" />
+              <div style="margin-bottom: 8px; white-space: nowrap; width: 150px; text-align: left;">일 이상</div>
+            </div>
+            <p id="longRunningMsg" class="calendar-status"></p>
+            <ul id="longRunningList" class="issue-list" aria-live="polite"></ul>
+          </div>
+        </section>
+      </section>
+
+      <section
+        id="panel-month-check"
+        class="tab-panel hidden"
+        role="tabpanel"
+        aria-labelledby="tab-month-check"
+      >
+        <section class="card">
           <div class="row issue-filter-row">
-            <div style="width: 60px; margin-bottom: 8px;">상태: </div>
-            <input id="myIssuesStatusFilter" type="text" placeholder="진행 중" value="진행 중" style="margin-top: 0;"/>
+            <label class="grow" style="margin-bottom: 0;">
+              <input id="monthCheckMonth" type="month" />
+            </label>
             <div class="actions issue-filter-actions">
-              <button id="loadMyInProgressIssues" class="primary" type="button">
-                목록 불러오기
+              <button id="loadMonthCheck" class="primary" type="button">
+                조회
               </button>
             </div>
           </div>
-          <div id="myIssuesPaging" class="issue-paging hidden">
-            <span id="myIssuesPageInfo" class="issue-page-info"></span>
-            <div class="issue-paging-buttons">
-              <button id="myIssuesPrev" class="secondary" type="button">이전</button>
-              <button id="myIssuesNext" class="secondary" type="button">다음</button>
-            </div>
-          </div>
-          <div id="myIssuesProjectFilterRow" class="row issue-filter-row hidden">
-            <div style="width: 60px; margin-bottom: 8px;">프로젝트: </div>
-            <select id="myIssuesProjectFilter" style="margin-top: 0;">
-              <option value="">전체</option>
-            </select>
-          </div>
-          <ul id="myIssuesList" class="issue-list" aria-live="polite"></ul>
+          <p id="monthCheckStatus" class="calendar-status"></p>
+          <p id="monthCheckSummary" class="calendar-status month-check-month-summary"></p>
+          <ul id="monthCheckList" class="issue-list" aria-live="polite"></ul>
         </section>
       </section>
 
